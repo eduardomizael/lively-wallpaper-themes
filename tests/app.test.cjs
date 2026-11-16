@@ -4,7 +4,7 @@ let frame, interval, deadline, draws = 0, clock = 0, simulationTime = 0, request
 const events = {};
 const elements = new Map(), arcs = [];
 const gradient = { addColorStop() {} };
-const ctx = new Proxy({ arc: (...args) => arcs.push(args), createRadialGradient: () => gradient, createLinearGradient: () => gradient }, { get: (t, k) => t[k] || (() => {}) });
+const ctx = new Proxy({ arc: (...args) => arcs.push(args), createRadialGradient: () => gradient, createLinearGradient: () => gradient, createImageData:(w,h)=>({width:w,height:h,data:new Uint8ClampedArray(w*h*4)}),createPattern:()=>({}) }, { get: (t, k) => t[k] || (() => {}) });
 function element(key) {
   if (!elements.has(key)) elements.set(key, { style: { setProperty() {} }, hidden: true, options: [0, 1], querySelectorAll: () => [], add(option) { this.options.push(option); }, getContext: () => ctx, textContent: '' });
   return elements.get(key);
@@ -52,7 +52,7 @@ page.livelyPropertyListener('mouseFog',false);
 const disabledRequests = requests;
 events.mousemove({clientX:160,clientY:140});
 assert.equal(requests, disabledRequests, 'Disabling the effect ignores mouse movement');
-page.livelyPropertyListener('mouseFogSize',9999); assert.equal(element('#mouseFogSize').value,300);
+page.livelyPropertyListener('mouseFogSize',9999); assert.equal(element('#mouseFogSize').value,500);
 element('#collectIcons').onclick(); assert.equal(page.location.href, 'circuit-orbit-v2://collect'); assert.ok(interval); assert.ok(deadline);
 page.receiveCollectionResult({ completedAt: new Date(Date.now() + 1000).toISOString(), ok: true, map: snapshot });
 assert.equal(interval, null); assert.equal(deadline, null); assert.match(element('#collectStatus').textContent, /Mapa salvo/);

@@ -2,6 +2,7 @@
 import json
 import math
 import re
+import base64
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -88,6 +89,11 @@ def paint(image, command):
     d = ImageDraw.Draw(image,'RGBA')
     if command['op'] == 'rect':
         x,y,w,h = command['rect']
+        if isinstance(style,dict) and style.get('kind') == 'pattern':
+            tile = ASSETS[style['image']]
+            for yy in range(round(y*S),round((y+h)*S),tile.height):
+                for xx in range(round(x*S),round((x+w)*S),tile.width): image.paste(tile,(xx,yy),tile)
+            return
         if isinstance(style,str):
             d.rectangle((x*S,y*S,(x+w)*S,(y+h)*S),fill=color(style))
         else:
@@ -133,7 +139,9 @@ def paint(image, command):
 
 ASSETS = []
 for asset in DATA.get('assets',[]):
-    image = Image.new('RGBA',(asset['width']*S,asset['height']*S))
+    if asset.get('rgbaBase64'):
+        image = Image.frombytes('RGBA',(asset['width'],asset['height']),base64.b64decode(asset['rgbaBase64'])).resize((asset['width']*S,asset['height']*S),Image.Resampling.BILINEAR)
+    else: image = Image.new('RGBA',(asset['width']*S,asset['height']*S))
     for command in asset['commands']: paint(image,command)
     ASSETS.append(image)
 base = background()

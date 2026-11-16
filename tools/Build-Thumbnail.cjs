@@ -9,7 +9,7 @@ fs.mkdirSync(out, { recursive: true });
 let seed = 8041;
 const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 const icons = [[105,125],[300,100],[495,130],[535,265],[320,275],[100,265]].map(([x,y],id) => ({ id, x, y, radius: 21 }));
-const config = { accent: '#49e5ff', glow: 90, trail: 110, fogStrength: 45, dustCount: 32, impactStrength: 40, mouseFog:true, mouseFogStrength:35, mouseFogSize:160 };
+const config = { accent: '#49e5ff', glow: 90, trail: 110, fogStrength: 45, dustCount: 32, impactStrength: 40, mouseFog:true, mouseFogStrength:35, mouseFogSize:260 };
 const system = new E.PulseSystem(icons, { width: 640, height: 360, speed: 210, chargeTime: 650, persistencePercent: 60 }, random);
 let commands = [], currentPath = [];
 const ctx = {
@@ -23,6 +23,7 @@ const ctx = {
   fill() { commands.push({ op: 'fill', path: currentPath.slice(), style: this.fillStyle }); },
   fillRect(x,y,w,h) { commands.push({ op: 'rect', rect: [x,y,w,h], style: this.fillStyle }); },
   drawImage(image,x,y,w,h) { commands.push({ op: 'image', image: image.assetId, rect: [x,y,w,h], alpha: this.globalAlpha }); },
+  createPattern(image) { return {kind:'pattern',image:image.assetId}; },
   createRadialGradient(...args) { return { kind: 'radial', args, stops: [], addColorStop(offset,color) { this.stops.push([offset,color]); } }; },
   createLinearGradient(...args) { return { kind: 'linear', args, stops: [], addColorStop(offset,color) { this.stops.push([offset,color]); } }; }
 };
@@ -34,7 +35,7 @@ const field = new A.Atmosphere(640,360), assets = [];
 const sprites = A.createSprites((width,height) => {
   const asset = { width,height,commands:[] }, assetId = assets.length;
   assets.push(asset);
-  return { assetId,getContext:()=>({createRadialGradient:ctx.createRadialGradient,fillRect(x,y,w,h){asset.commands.push({op:'rect',rect:[x,y,w,h],style:this.fillStyle})}}) };
+  return { assetId,getContext:()=>({createRadialGradient:ctx.createRadialGradient,createImageData:(w,h)=>({width:w,height:h,data:new Uint8ClampedArray(w*h*4)}),putImageData(image){asset.rgbaBase64=Buffer.from(image.data).toString('base64');},fillRect(x,y,w,h){asset.commands.push({op:'rect',rect:[x,y,w,h],style:this.fillStyle})}}) };
 },config.accent);
 function step() {
   // A generic pointer path illustrates the interaction without capturing the user's cursor.

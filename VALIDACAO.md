@@ -1,4 +1,4 @@
-# Validação — Impact HUD 2.1.0-beta.2
+# Validação — Impact HUD 2.1.0-beta.3
 
 ## Testes locais
 
@@ -15,7 +15,7 @@
 - Projeção com monitor em coordenadas negativas.
 - Agendamento de 30/60 FPS sob uma fonte simulada de 165 Hz, mantendo o tempo de movimento.
 - Monitor vazio continua exibindo o ambiente quando habilitado; sem ambiente ativo, para de redesenhar. Não há consulta periódica ao mapa.
-- Cache de três texturas mantido após mil desenhos da névoa, quantidade configurável de partículas, limite de seis ondas e descarte após 1,6 segundo.
+- Cache de cinco texturas mantido após mil desenhos da névoa, padrão de granulação reutilizado, quantidade configurável de partículas, limite de seis ondas e descarte após 1,6 segundo.
 - Coleta manual com espera limitada e encerramento da espera em sucesso ou cancelamento.
 
 ## Navegador e equipamento
@@ -45,3 +45,11 @@ A instalação conferiu os quinze arquivos de execução, preservou as opções 
 - Controles de habilitação, intensidade e tamanho, incluindo desligamento sem capturar movimentos e limite de tamanho.
 - Movimento do cursor exercitado na prévia do Chrome; nuvem observada, opção desligada e ligada novamente, sem erros/avisos no console. Captura: `outputs/previa-nevoa-mouse.png`.
 - A miniatura usa uma trajetória de cursor sintética, sem capturar movimentos pessoais. O comportamento físico em telas com escalas diferentes ainda depende de conferência no desktop. Não foi feita medição de consumo específica desta reação.
+
+## Suavização da névoa
+
+- Nuvens procedurais de 512×512 com queda contínua, transparência com arredondamento estocástico e granulação fixa de até 2/255 de opacidade para reduzir faixas de luminosidade.
+- Camada de névoa ampliada para acompanhar a densidade da tela, com teto de 3840×2160. Na prévia, o bitmap de 3440×1271 coincidiu com o tamanho visível, eliminando a ampliação da antiga camada de 960×540 nesse caso.
+- Perfil próprio do mouse testado com pico central menor e maior distribuição lateral da luminosidade. Novo tamanho padrão: 260 px; limite máximo: 500 px.
+- Prévia visual inspecionada, inclusive movimentação do cursor; sem erros/avisos observados no console. Captura: `outputs/previa-nevoa-suave.png`.
+- Os testes confirmam cache das texturas e do padrão de granulação. O custo de GPU da resolução maior não foi medido e a aparência final depende também da tela.

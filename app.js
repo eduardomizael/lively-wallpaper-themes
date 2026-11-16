@@ -4,8 +4,8 @@
   const A = window.CircuitAtmosphere, fogCanvas = document.querySelector('#atmosphere'), fogCtx = fogCanvas.getContext('2d');
   const controls = document.querySelector('#controls'), notice = document.querySelector('#notice');
   const params = new URLSearchParams(location.search), preview = params.has('preview'), demo = params.has('demo');
-  const config = { accent: '#49e5ff', speed: 160, glow: 70, trail: 180, circleSize: 100, chargeTime: 1000, persistencePercent: 60, frameRate: 1, monitor: 0, grid: true, fogStrength: 45, dustCount: 32, impactStrength: 40, mouseFog: true, mouseFogStrength: 35, mouseFogSize: 160 };
-  const ranges = { speed: [40, 800], glow: [10, 100], trail: [60, 700], circleSize: [40, 200], chargeTime: [300, 2400], persistencePercent: [1, 99], frameRate: [0, 1], monitor: [0, 9], fogStrength: [0, 100], dustCount: [0, 70], impactStrength: [0, 100], mouseFogStrength: [0, 100], mouseFogSize: [60, 300] };
+  const config = { accent: '#49e5ff', speed: 160, glow: 70, trail: 180, circleSize: 100, chargeTime: 1000, persistencePercent: 60, frameRate: 1, monitor: 0, grid: true, fogStrength: 45, dustCount: 32, impactStrength: 40, mouseFog: true, mouseFogStrength: 35, mouseFogSize: 260 };
+  const ranges = { speed: [40, 800], glow: [10, 100], trail: [60, 700], circleSize: [40, 200], chargeTime: [300, 2400], persistencePercent: [1, 99], frameRate: [0, 1], monitor: [0, 9], fogStrength: [0, 100], dustCount: [0, 70], impactStrength: [0, 100], mouseFogStrength: [0, 100], mouseFogSize: [60, 500] };
   let rgb = '73,229,255', map = null, system = null, width = 0, height = 0, signature = '', chosen = '';
   let framePending = false, lastDraw = null, nextDraw = 0, collecting = false;
   let collectionTimer = null, collectionDeadline = null, collectionStarted = 0;
@@ -22,9 +22,10 @@
     const dpr = Math.min(devicePixelRatio || 1, 2);
     canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const fogScale = Math.min(1, 960 / width, 540 / height);
+    const fogScale = Math.min(devicePixelRatio || 1, 3840 / width, 2160 / height);
     fogCanvas.width = Math.max(1, Math.round(width * fogScale)); fogCanvas.height = Math.max(1, Math.round(height * fogScale));
     fogCtx.setTransform(fogScale, 0, 0, fogScale, 0, 0);
+    fogCtx.imageSmoothingEnabled = true; fogCtx.imageSmoothingQuality = 'high';
     field.resize(width, height); field.waves = []; fogDirty = true;
     rebuild(true);
     schedule();

@@ -5,6 +5,8 @@ $library = (Resolve-Path -LiteralPath $LibraryPath).Path
 $wallpapers = Join-Path $library 'wallpapers'
 if (-not (Test-Path -LiteralPath $wallpapers -PathType Container)) { throw 'Pasta de wallpapers nao encontrada.' }
 $target = Join-Path $wallpapers 'circuit-orbit-v2'
+$previousDefaults = $null
+if (Test-Path -LiteralPath (Join-Path $target 'LivelyProperties.json')) { $previousDefaults = Get-Content -LiteralPath (Join-Path $target 'LivelyProperties.json') -Raw -Encoding UTF8 | ConvertFrom-Json }
 $files = @('index.html','app.js','engine.js','hud.js','atmosphere.js','style.css','LivelyInfo.json','LivelyProperties.json','thumbnail.jpg','preview.gif','Configurar-utilitario.cmd','Coletar-icones.cmd','tools\DesktopMap.cs','tools\Collect-Desktop.ps1','tools\Register-Collector.ps1')
 foreach ($file in $files) { if (-not (Test-Path -LiteralPath (Join-Path $source $file) -PathType Leaf)) { throw ('Arquivo ausente: ' + $file) } }
 $all = @(Get-CimInstance Win32_Process)
@@ -57,7 +59,8 @@ try {
             $new = Get-Content -LiteralPath (Join-Path $source 'LivelyProperties.json') -Raw -Encoding UTF8 | ConvertFrom-Json
             foreach ($property in $new.PSObject.Properties) {
                 $existing = $old.PSObject.Properties[$property.Name]
-                if ($existing -and $property.Value.type -ne 'button') { $property.Value.value = $existing.Value.value }
+                $wasOldMouseDefault = $property.Name -eq 'mouseFogSize' -and $existing -and $previousDefaults -and $existing.Value.value -eq $previousDefaults.mouseFogSize.value
+                if ($existing -and $property.Value.type -ne 'button' -and -not $wasOldMouseDefault) { $property.Value.value = $existing.Value.value }
             }
             [IO.File]::WriteAllText($cache.FullName,($new | ConvertTo-Json -Depth 8),$encoding)
         }
