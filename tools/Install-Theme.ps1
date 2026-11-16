@@ -5,7 +5,7 @@ $library = (Resolve-Path -LiteralPath $LibraryPath).Path
 $wallpapers = Join-Path $library 'wallpapers'
 if (-not (Test-Path -LiteralPath $wallpapers -PathType Container)) { throw 'Pasta de wallpapers nao encontrada.' }
 $target = Join-Path $wallpapers 'circuit-orbit-v2'
-$files = @('index.html','app.js','engine.js','hud.js','style.css','LivelyInfo.json','LivelyProperties.json','Configurar-utilitario.cmd','Coletar-icones.cmd','tools\DesktopMap.cs','tools\Collect-Desktop.ps1','tools\Register-Collector.ps1')
+$files = @('index.html','app.js','engine.js','hud.js','style.css','LivelyInfo.json','LivelyProperties.json','thumbnail.jpg','preview.gif','Configurar-utilitario.cmd','Coletar-icones.cmd','tools\DesktopMap.cs','tools\Collect-Desktop.ps1','tools\Register-Collector.ps1')
 foreach ($file in $files) { if (-not (Test-Path -LiteralPath (Join-Path $source $file) -PathType Leaf)) { throw ('Arquivo ausente: ' + $file) } }
 foreach ($folder in @($target,(Join-Path $target 'tools'),(Join-Path $target 'settings'))) { New-Item -ItemType Directory -Path $folder -Force | Out-Null }
 $sha = [Security.Cryptography.SHA256]::Create()

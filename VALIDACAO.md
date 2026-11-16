@@ -26,3 +26,7 @@ Arquivos de execução copiados para `Library/wallpapers/circuit-orbit-v2` e con
 Abertura do protocolo pelo player, alinhamento físico sobre os ícones, escalas diferentes entre monitores e consumo real desta versão dependem de validação no Lively. O coletor Win32 e seu funcionamento pontual foram testados na v1; a v2 reutiliza o coletor e registra um protocolo separado.
 
 O relatório `ANALISE_DE_DESEMPENHO.md` refere-se à v1. Não há comparação quantitativa de consumo entre versões.
+
+## Miniatura do catálogo
+
+`thumbnail.jpg` (640×360) e `preview.gif` (640×360, 120 quadros a 20 FPS, seis segundos, loop contínuo) gerados com os comandos do motor/HUD reais e ícones genéricos. Quadros inspecionados visualmente e todos os quadros do GIF decodificados para conferir integridade. Um pequeno dissolve suaviza a volta do loop. Os campos `Thumbnail` e `Preview` seguem a configuração dos outros temas locais. Não houve mudança no fundo ou na animação de execução do wallpaper.

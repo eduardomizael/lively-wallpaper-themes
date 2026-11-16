@@ -59,6 +59,10 @@ Essas alterações reduzem trabalho desnecessário identificado na v1. O ganho r
 
 ## Verificar
 
+A miniatura estática `thumbnail.jpg` e a prévia animada `preview.gif` são usadas pela biblioteca do Lively. A animação de seis segundos usa o motor e a geometria reais do HUD, com posições e ícones genéricos. É apenas uma prévia de catálogo e não altera o fundo do tema.
+
+Para regenerar: execute `node tools/Build-Thumbnail.cjs`, depois `python tools/Render-Thumbnail.py` e converta os frames de `outputs/thumbnail/` para GIF com FFmpeg. As ferramentas de geração não são copiadas para a instalação.
+
 ```
 node tests/engine.test.cjs
 node tests/app.test.cjs
