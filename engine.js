@@ -1,32 +1,8 @@
 (function (root) {
   'use strict';
+  const TAU = Math.PI * 2;
+  const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
-  function nearest(current, icons, visited) {
-    return icons.filter(i => !visited.has(i.id)).sort((a, b) => distance(current, a) - distance(current, b) || a.id - b.id)[0];
-  }
-  function circuit(a, b) {
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const diagonal = Math.min(Math.abs(dx), Math.abs(dy)) * 0.65;
-    const middle = { x: b.x - Math.sign(dx) * diagonal, y: a.y };
-    const elbow = { x: b.x, y: a.y + Math.sign(dy) * diagonal };
-    return [a, middle, elbow, b].filter((p, i, points) => !i || distance(p, points[i - 1]) > 0.01);
-  }
-  function polyline(points) {
-    const lengths = points.slice(1).map((p, i) => distance(points[i], p));
-    return { points, lengths, total: lengths.reduce((a, b) => a + b, 0) };
-  }
-  function sample(path, progress) {
-    if (progress >= path.total) return path.points[path.points.length - 1];
-    let left = Math.max(0, Math.min(path.total, progress));
-    for (let i = 0; i < path.lengths.length; i++) {
-      if (left <= path.lengths[i]) {
-        const t = path.lengths[i] ? left / path.lengths[i] : 0;
-        return { x: path.points[i].x + (path.points[i + 1].x - path.points[i].x) * t, y: path.points[i].y + (path.points[i + 1].y - path.points[i].y) * t };
-      }
-      left -= path.lengths[i];
-    }
-    return path.points[path.points.length - 1];
-  }
   function virtualBounds(monitors) {
     const x = Math.min(...monitors.map(m => m.x)), y = Math.min(...monitors.map(m => m.y));
     return { x, y, width: Math.max(...monitors.map(m => m.x + m.width)) - x, height: Math.max(...monitors.map(m => m.y + m.height)) - y };
@@ -36,22 +12,92 @@
     return icons.filter(i => i.x + i.width / 2 >= bounds.x && i.x + i.width / 2 < bounds.x + bounds.width && i.y + i.height / 2 >= bounds.y && i.y + i.height / 2 < bounds.y + bounds.height)
       .map(i => ({ id: i.id, x: (i.x + i.width / 2 - bounds.x) * sx, y: (i.y + i.height / 2 - bounds.y) * sy, radius: Math.min(i.width * sx, i.height * sy) / 2 }));
   }
-  function tourLength(start, icons, alreadyVisited = new Set()) {
-    const visited = new Set(alreadyVisited);
-    let from = start, total = 0, target;
-    while ((target = nearest(from, icons, visited))) {
-      const entry = { x: target.x, y: target.y - target.radius };
-      total += polyline(circuit(from, entry)).total + Math.PI * 2 * target.radius;
-      visited.add(target.id); from = entry;
+  function pickTarget(icons, currentId, previousId, random = Math.random) {
+    let candidates = icons.filter(i => i.id !== currentId);
+    const fresh = candidates.filter(i => i.id !== previousId);
+    if (fresh.length) candidates = fresh;
+    return candidates[Math.min(candidates.length - 1, Math.floor(clamp(random(), 0, .999999) * candidates.length))] || null;
+  }
+  const flightDuration = (length, speed) => clamp(length / (clamp(speed, 40, 800) * 8), .16, 4);
+  function shotPosition(shot) {
+    const progress = clamp(shot.elapsed / shot.duration, 0, 1) ** 2.6;
+    return { x: shot.from.x + (shot.to.x - shot.from.x) * progress, y: shot.from.y + (shot.to.y - shot.from.y) * progress, progress };
+  }
+  function stationOpacity(age, lifetime) {
+    const t = clamp((age - 1) / Math.max(1, lifetime - 1), 0, 1);
+    return 1 - t * t * (3 - 2 * t);
+  }
+  class PulseSystem {
+    constructor(icons, options = {}, random = Math.random) {
+      this.icons = icons;
+      this.options = { width: 1920, height: 1080, speed: 160, chargeTime: 1000, lingerShots: 4, ...options };
+      this.random = random;
+      this.time = 0; this.sequence = 0; this.phase = 'idle'; this.charge = 0;
+      this.current = null; this.previousId = null; this.shot = null;
+      this.stations = new Map(); this.particles = [];
+      if (icons.length) {
+        const target = pickTarget(icons, null, null, random);
+        const { width, height } = this.options;
+        const edges = [{ x: -30, y: target.y }, { x: width + 30, y: target.y }, { x: target.x, y: -30 }, { x: target.x, y: height + 30 }];
+        edges.sort((a, b) => distance(a, target) - distance(b, target));
+        this.launch(edges[0], target, false);
+      }
     }
-    return total;
+    setOptions(options) {
+      const fraction = this.shot ? this.shot.elapsed / this.shot.duration : 0;
+      Object.assign(this.options, options);
+      if (this.shot) {
+        this.shot.duration = flightDuration(distance(this.shot.from, this.shot.to), this.options.speed);
+        this.shot.elapsed = fraction * this.shot.duration;
+      }
+    }
+    launch(source, target, fromStation = true) {
+      const length = distance(source, target), dx = (target.x - source.x) / (length || 1), dy = (target.y - source.y) / (length || 1);
+      const offset = fromStation ? Math.min(source.radius + 6, length * .3) : 0;
+      const from = { x: source.x + dx * offset, y: source.y + dy * offset };
+      this.shot = { from, to: target, elapsed: 0, duration: flightDuration(distance(from, target), this.options.speed) };
+      this.phase = 'flight';
+      const station = this.stations.get(source.id);
+      if (station) station.emission = .2;
+    }
+    impact(target) {
+      this.sequence++;
+      const existing = this.stations.get(target.id);
+      this.stations.set(target.id, { icon: target, lastHit: this.sequence, hitTime: this.time, emission: 0, spin: existing?.spin ?? this.random() * TAU });
+      this.previousId = this.current?.id ?? null;
+      this.current = target; this.shot = null; this.phase = 'charge'; this.charge = 0;
+      for (let i = 0; i < 12; i++) {
+        const a = i / 12 * TAU + this.random() * .2, speed = 30 + this.random() * 65;
+        this.particles.push({ x: target.x + Math.cos(a) * target.radius * .8, y: target.y + Math.sin(a) * target.radius * .8, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, life: .38, maxLife: .38 });
+      }
+    }
+    update(dt) {
+      dt = Math.max(0, dt); this.time += dt;
+      for (const p of this.particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+      this.particles = this.particles.filter(p => p.life > 0);
+      for (const station of this.stations.values()) station.emission = Math.max(0, station.emission - dt);
+      if (this.phase === 'flight') {
+        this.shot.elapsed = Math.min(this.shot.duration, this.shot.elapsed + dt);
+        if (this.shot.elapsed >= this.shot.duration) this.impact(this.shot.to);
+      } else if (this.phase === 'charge') {
+        this.charge = Math.min(1, this.charge + dt / (this.options.chargeTime / 1000));
+        if (this.charge >= 1) {
+          const next = pickTarget(this.icons, this.current.id, this.previousId, this.random);
+          if (next) this.launch(this.current, next);
+          else { this.charge = 0; this.stations.get(this.current.id).emission = .16; }
+        }
+      }
+      for (const [id, station] of this.stations) {
+        if (id !== this.current?.id && this.opacity(station) <= 0) this.stations.delete(id);
+      }
+    }
+    opacity(station) {
+      if (station.icon.id === this.current?.id) return 1;
+      const fractionalShot = this.phase === 'flight' ? clamp(this.shot.elapsed / this.shot.duration, 0, 1) : 0;
+      return stationOpacity(this.sequence - station.lastHit + fractionalShot, this.options.lingerShots);
+    }
   }
-  function residueOpacity(position, travelled, roundLength) {
-    if (roundLength <= 0 || position > travelled) return 0;
-    // The beginning stays intact until 80% of a round, then fades out in order by 95%.
-    return Math.max(0, Math.min(1, (position - travelled + roundLength * .95) / (roundLength * .15)));
-  }
-  const api = { distance, nearest, circuit, polyline, sample, virtualBounds, project, tourLength, residueOpacity };
+  const api = { TAU, clamp, distance, virtualBounds, project, pickTarget, flightDuration, shotPosition, stationOpacity, PulseSystem };
   if (typeof module !== 'undefined') module.exports = api;
   root.CircuitEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

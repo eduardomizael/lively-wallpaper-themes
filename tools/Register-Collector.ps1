@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$protocolRoot = 'HKCU:\Software\Classes\circuit-orbit'
+$protocolRoot = 'HKCU:\Software\Classes\circuit-orbit-v2'
 $collector = Join-Path $PSScriptRoot 'Collect-Desktop.ps1'
 $powershellPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
 # The URL is deliberately not passed as an argument: this protocol can only collect the desktop map.

@@ -1,82 +1,43 @@
-const assert = require('node:assert/strict');
-const vm = require('node:vm');
-const fs = require('node:fs');
-const path = require('node:path');
+const assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
 const E = require('../engine.js');
-let frame, interval, deadline, cleared = 0, numbers = 0;
-const arcs = [], scripts = [];
-let drawnPath = [];
-const residualStrokes = [];
-const ctx = new Proxy({
-  arc: (...args) => arcs.push(args), fillText: () => numbers++,
-  beginPath: () => { drawnPath = []; },
-  moveTo: (x, y) => drawnPath.push([x, y]), lineTo: (x, y) => drawnPath.push([x, y]),
-  stroke() { if (this.lineWidth === 1) residualStrokes.push(drawnPath.slice()); },
-  createRadialGradient: () => ({ addColorStop() {} })
-}, { get: (target, key) => target[key] || (() => {}) });
-const elements = new Map();
-function element(selector) {
-  if (!elements.has(selector)) elements.set(selector, {
-    style: { setProperty() {} }, hidden: true, options: [0, 1],
-    querySelectorAll: () => [], add(option) { this.options.push(option); },
-    getContext: () => ctx, textContent: '', remove() {}
-  });
-  return elements.get(selector);
+let frame, interval, deadline, draws = 0, clock = 0, simulationTime = 0;
+const elements = new Map(), arcs = [];
+const gradient = { addColorStop() {} };
+const ctx = new Proxy({ arc: (...args) => arcs.push(args), createRadialGradient: () => gradient, createLinearGradient: () => gradient }, { get: (t, k) => t[k] || (() => {}) });
+function element(key) {
+  if (!elements.has(key)) elements.set(key, { style: { setProperty() {} }, hidden: true, options: [0, 1], querySelectorAll: () => [], add(option) { this.options.push(option); }, getContext: () => ctx, textContent: '' });
+  return elements.get(key);
 }
 const page = {
   CircuitEngine: E, URLSearchParams, console, Date, Math,
-  innerWidth: 1000, innerHeight: 800, devicePixelRatio: 1,
-  screen: { width: 1000, height: 800 },
-  location: { search: '?preview', href: '' },
-  document: {
-    querySelector: element, getElementById: id => element('#' + id),
-    createElement: () => ({ remove() {} }),
-    head: { appendChild: script => scripts.push(script) },
-    documentElement: { style: { setProperty() {} } }
-  },
+  innerWidth: 1000, innerHeight: 800, devicePixelRatio: 1, screen: { width: 1000, height: 800 }, location: { search: '?preview', href: '' },
+  document: { querySelector: element, getElementById: id => element('#' + id), createElement: () => ({ remove() {} }), head: { appendChild() {} }, documentElement: { style: { setProperty() {} } }, body: { classList: { toggle() {} } } },
   addEventListener() {}, requestAnimationFrame: callback => { frame = callback; },
-  setInterval: callback => { interval = callback; return 1; },
-  setTimeout: callback => { deadline = callback; return 2; },
-  clearInterval: () => { interval = null; cleared++; },
-  clearTimeout: () => { deadline = null; cleared++; },
+  setInterval: callback => { interval = callback; return 1; }, setTimeout: callback => { deadline = callback; return 2; }, clearInterval: () => { interval = null; }, clearTimeout: () => { deadline = null; },
   Option: function(text, value) { this.text = text; this.value = value; this.dataset = {}; }
 };
 page.window = page;
-vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8'), page);
-assert.equal(interval, undefined, 'No recurring collection or file polling at startup');
-const snapshot = { monitors: [{ x: 0, y: 0, width: 1000, height: 800 }], icons: [{ id: 0, x: 400, y: 300, width: 48, height: 48 }], updatedAt: new Date().toISOString() };
-page.receiveDesktopMap(snapshot);
-assert.equal(arcs.length, 0, 'Loading icon positions must not draw any circle');
-page.livelyPropertyListener('debug', true); // Old persisted settings cannot restore the removed overlay.
-for (let i = 0; i < 500; i++) frame(i * 16);
-assert.ok(arcs.length > 0);
-assert.ok(arcs.every(arc => arc[2] === 1.9), 'Only the light head is drawn as an arc; no icon rings or pulses');
-assert.equal(numbers, 0, 'No icon numbers are rendered');
-const longMap = { ...snapshot, icons: [
-  { id: 0, x: 20, y: 20, width: 48, height: 48 },
-  { id: 1, x: 920, y: 20, width: 48, height: 48 },
-  { id: 2, x: 920, y: 720, width: 48, height: 48 },
-  { id: 3, x: 20, y: 720, width: 48, height: 48 }
-] };
-page.receiveDesktopMap(longMap);
-residualStrokes.length = 0;
-frame(8000); frame(8016);
-const firstPoint = residualStrokes[0][0];
-for (let i = 1; i <= 300; i++) { residualStrokes.length = 0; frame(8016 + i * 16); }
-assert.ok(residualStrokes.some(points => points.some(p => p[0] === firstPoint[0] && p[1] === firstPoint[1])), 'The start of a long route remains visible beyond three seconds');
-element('#collectIcons').onclick();
-assert.equal(page.location.href, 'circuit-orbit://collect');
-assert.equal(typeof interval, 'function');
-assert.equal(typeof deadline, 'function');
-assert.equal(element('#collectIcons').disabled, true);
+const context = vm.createContext(page);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../hud.js'), 'utf8'), context);
+const realDraw = page.CircuitHud.drawScene;
+page.CircuitHud.drawScene = (...args) => { draws++; simulationTime = args[1].time; realDraw(...args); };
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8'), context);
+assert.equal(frame, undefined, 'No idle animation before a saved map loads');
+assert.equal(interval, undefined, 'No background collector or file polling');
+const snapshot = { monitors: [{ x: 0, y: 0, width: 1000, height: 800 }], icons: [{ id: 0, x: 50, y: 50, width: 48, height: 48 }, { id: 1, x: 800, y: 650, width: 48, height: 48 }] };
+page.receiveDesktopMap(snapshot); assert.equal(arcs.length, 0);
+for (let i = 0; i <= 165; i++) { frame(clock); clock += 1000 / 165; }
+assert.ok(draws >= 58 && draws <= 62, `60 FPS cap at 165 Hz: observed ${draws}`);
+assert.ok(Math.abs(simulationTime - 1) < .03, 'Frame limiting preserves real elapsed time');
+page.livelyPropertyListener('frameRate', 0); draws = 0;
+for (let i = 0; i < 165; i++) { frame(clock); clock += 1000 / 165; }
+assert.ok(draws >= 29 && draws <= 31, `30 FPS cap: observed ${draws}`);
+assert.ok(Math.abs(simulationTime - 2) < .05, 'Switching FPS must not speed up or slow down the simulation');
+page.livelyPropertyListener('speed', 9999); assert.equal(element('#speed').value, 800);
+page.receiveDesktopMap({ ...snapshot, icons: [] }); draws = 0; frame(clock);
+assert.equal(draws, 0, 'An empty monitor stops redrawing');
+element('#collectIcons').onclick(); assert.equal(page.location.href, 'circuit-orbit-v2://collect'); assert.ok(interval); assert.ok(deadline);
 page.receiveCollectionResult({ completedAt: new Date(Date.now() + 1000).toISOString(), ok: true, map: snapshot });
-assert.equal(interval, null, 'Polling stops after collecting');
-assert.equal(deadline, null);
-assert.equal(cleared, 2);
-assert.equal(element('#collectIcons').disabled, false);
-assert.match(element('#collectStatus').textContent, /Mapa salvo/);
-element('#collectIcons').onclick();
-deadline();
-assert.equal(interval, null, 'Polling also stops when utility launch is cancelled or unavailable');
-assert.match(element('#collectStatus').textContent, /Coleta não confirmada/);
-console.log('Sem círculos prévios/números; coleta pontual e espera limitada: OK');
+assert.equal(interval, null); assert.equal(deadline, null); assert.match(element('#collectStatus').textContent, /Mapa salvo/);
+element('#collectIcons').onclick(); deadline(); assert.equal(interval, null); assert.equal(element('#collectIcons').disabled, false);
+console.log('HUD, limite de FPS, monitor vazio e coleta unica: OK');

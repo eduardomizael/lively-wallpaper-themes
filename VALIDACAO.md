@@ -1,30 +1,27 @@
-# Validação — 16/11/2026
+# Validação — Impact HUD 2.0.0-beta.1
 
-- Leitura Win32 real: 90 ícones, monitor principal 3440×1440 e secundário 1920×1080; todos os ícones estavam no principal.
-- A versão inicial com leitor contínuo foi substituída: agora o coletor executa uma vez e encerra, salvando o mapa em `settings/`. Não há serviço ou atualização automática.
-- Testes Node aprovados: vizinho ainda não visitado, caminhos com segmentos horizontais/verticais/45°, pontos inicial/final e projeção por monitor com coordenadas negativas.
-- Prévia no Chrome por servidor HTTP restrito a 127.0.0.1: animação renderizada, mapa real carregado e sem erros/avisos no console observado.
-- Seleção principal/automático: 90 ícones. Secundário: 0 ícones e fundo. Área estendida: 90 ícones.
-- O modo de conferência, os números, os círculos persistentes e os pulsos foram removidos. `outputs/previa-mapeamento.png` é uma captura histórica da versão anterior; não representa a versão atual.
-- A ferramenta de navegador bloqueou navegação ao protocolo `file:`. A leitura por arquivo local deve ser conferida ao abrir `Abrir-previa.cmd` ou no Lively; a prévia HTTP foi validada.
+## Testes locais
 
-Ainda não validado: instalação/recarregamento no Lively, abertura do protocolo local pelo botão no player, alinhamento visual diretamente sobre os ícones do desktop, escalas diferentes entre monitores e layout de monitor com coordenadas negativas em equipamento real. A geometria de coordenadas negativas foi coberta nos testes locais. Mudanças de ícones só passam a valer depois de uma nova coleta manual.
+`node tests/engine.test.cjs` e `node tests/app.test.cjs` passaram.
 
-Nenhum tema foi copiado para a biblioteca do Lively e o wallpaper instalado não foi alterado. O leitor antigo foi encerrado. O protocolo local foi registrado para o utilitário desta pasta.
+- HUD inexistente antes do primeiro impacto e ativado somente na chegada.
+- Tiro em linha reta, com avanço crescente pela curva de aceleração.
+- Destinos sorteados sem atingir o próprio emissor; o retorno ao ícone anterior é evitado quando há alternativas.
+- Carga completa antes do disparo, sem salto de posição ao alterar a velocidade durante o voo.
+- Desvanecimento pela quantidade de impactos e descarte dos displays antigos.
+- Simulação prolongada com quantidade limitada de displays e partículas.
+- Casos sem ícones e com apenas um ícone.
+- Projeção com monitor em coordenadas negativas.
+- Agendamento de 30/60 FPS sob uma fonte simulada de 165 Hz, mantendo o tempo de movimento.
+- Monitor vazio sem redesenho contínuo e sem consulta periódica ao mapa.
+- Coleta manual com espera limitada e encerramento da espera em sucesso ou cancelamento.
 
-## Conferência da versão atual
+## Navegador e equipamento
 
-- Coleta única executada com sucesso: mapa salvo com 90 ícones; processo encerrado.
-- Atalho `circuit-orbit://collect` exercitado via Windows: atualizou o mapa salvo.
-- Após a coleta, o mapa permaneceu inalterado; nenhum coletor/serviço do projeto ficou ativo.
-- `tests/app.test.cjs` aprovado: nenhum círculo prévio ou número, configuração antiga de debug ignorada, espera do resultado interrompida no sucesso e no limite de 30 segundos.
-- Prévia visual atual conferida no Chrome sem erros/avisos observados. Captura: `outputs/previa-atual.png`.
-- O servidor HTTP usado somente para a conferência visual foi encerrado. A versão entregue usa arquivos locais e o utilitário pontual.
+Prévia HTML da v2 conferida no Chrome com quinze posições simuladas e, depois, com o mapa real salvo de noventa ícones em dois monitores. Controles de tamanho, carga e 30 FPS exercitados. Não houve erros/avisos no console observado. Captura em `outputs/previa-impact-hud-v2.png` registra o mapa real; os próprios ícones do Windows não aparecem na janela de prévia.
 
-## Ajuste do contorno e da trilha
+Arquivos de execução copiados para `Library/wallpapers/circuit-orbit-v2` e conferidos. O mapa salvo foi reutilizado, sem nova coleta automática. O protocolo `circuit-orbit-v2://collect` foi registrado para essa pasta. A versão 1 e seu protocolo foram preservados. Nenhum serviço foi iniciado. O servidor temporário usado na conferência foi encerrado.
 
-- Raio de exemplo para o mapa real (região de 76×52 px): reduzido de aproximadamente 60 para 29 px na escala 1:1. Nova opção de margem padrão: 3 px.
-- A trilha fraca permanece por distância equivalente a quase uma rodada; começa a apagar a parte mais antiga perto dos 80% do percurso, sem apagar todo o desenho ao mudar de ícone.
-- Testes aprovados para raio, estimativa do percurso, opacidade no início/meio/fim do desvanecimento e manutenção do começo de um caminho longo após mais de três segundos.
-- Prévia no Chrome conferida com mapa real: o caminho acumulado permanece visível, sem números ou contornos prévios. Captura: `outputs/previa-trilha-persistente.png`.
-- Arquivos de execução e propriedades salvas do monitor 1 atualizados na biblioteca do Lively; demais preferências preservadas. Recarregamento do tema no player não foi verificado.
+Abertura do protocolo pelo player, alinhamento físico sobre os ícones, escalas diferentes entre monitores e consumo real desta versão dependem de validação no Lively. O coletor Win32 e seu funcionamento pontual foram testados na v1; a v2 reutiliza o coletor e registra um protocolo separado.
+
+O relatório `ANALISE_DE_DESEMPENHO.md` refere-se à v1. Não há comparação quantitativa de consumo entre versões.

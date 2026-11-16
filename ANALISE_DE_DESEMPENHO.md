@@ -1,5 +1,7 @@
 # Consumo do Circuit Orbit — 16/11/2026
 
+> Relatório histórico da **versão 1**. A versão 2 substitui a trilha persistente por displays recentes e tiros, usa fundo/grade estáticos e limite de FPS. Os números abaixo não medem a v2. O script de medição na branch atual foi adaptado para a pasta instalada `circuit-orbit-v2`.
+
 ## Alteração aplicada
 
 Velocidade máxima ampliada de 500 para 800 na prévia, na biblioteca do Lively e nas propriedades salvas. A velocidade selecionada permanece em 160.

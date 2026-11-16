@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$protocolRoot = 'HKCU:\Software\Classes\circuit-orbit'
+$protocolRoot = 'HKCU:\Software\Classes\circuit-orbit-v2'
 $commandKey = $protocolRoot + '\shell\open\command'
 if (Test-Path -LiteralPath $commandKey) {
     $command = (Get-Item -LiteralPath $commandKey).GetValue('')

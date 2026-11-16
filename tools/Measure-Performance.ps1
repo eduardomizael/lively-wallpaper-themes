@@ -2,10 +2,10 @@ param([int]$Seconds = 20, [int[]]$Speeds = @(160, 800))
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $library = 'C:\Users\eduar\AppData\Local\Packages\12030rocksdanister.LivelyWallpaper_97hta09mmv6hy\LocalCache\Local\Lively Wallpaper\Library'
-$propertiesFile = Join-Path $library 'SaveData\wpdata\circuit-orbit\1\LivelyProperties.json'
+$propertiesFile = Join-Path $library 'SaveData\wpdata\circuit-orbit-v2\1\LivelyProperties.json'
 $original = Get-Content -LiteralPath $propertiesFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $all = @(Get-CimInstance Win32_Process)
-$players = @($all | Where-Object { $_.Name -eq 'Lively.Player.WebView2.exe' -and $_.CommandLine -like '*\wallpapers\circuit-orbit\index.html*' })
+$players = @($all | Where-Object { $_.Name -eq 'Lively.Player.WebView2.exe' -and $_.CommandLine -like '*\wallpapers\circuit-orbit-v2\index.html*' })
 if ($players.Count -ne 1) { throw 'A medicao exige uma instancia ativa do Circuit Orbit no Lively.' }
 $player = $players[0]
 $hostProcess = $all | Where-Object { $_.ProcessId -eq $player.ParentProcessId }
@@ -95,5 +95,5 @@ $report = [PSCustomObject]@{
     runs = $runs
 }
 $encoding = New-Object System.Text.UTF8Encoding($false)
-[IO.File]::WriteAllText((Join-Path $root 'outputs\performance-lively.json'), ($report | ConvertTo-Json -Depth 8), $encoding)
+[IO.File]::WriteAllText((Join-Path $root 'outputs\performance-lively-v2.json'), ($report | ConvertTo-Json -Depth 8), $encoding)
 Write-Output ('Velocidade original restaurada: ' + $original.speed.value)

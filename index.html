@@ -3,19 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Circuit Orbit</title>
+  <title>Circuit Orbit · Impact HUD</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <canvas id="scene" aria-label="Animação de trilhas luminosas ao redor dos ícones"></canvas>
+<body class="with-grid">
+  <canvas id="scene" aria-label="Disparos de laser entre displays futuristas dos ícones"></canvas>
   <aside id="notice" hidden></aside>
   <section id="controls" hidden>
-    <header><span class="eyebrow">DESKTOP REACTIVE SYSTEM</span><h1>Circuit Orbit<span> / 01</span></h1><p>Uma corrente de luz. Cada ícone, um destino.</p></header>
-    <label>Cor do laser <input id="accent" type="color" value="#49e5ff"></label>
-    <label>Velocidade da luz <input id="speed" type="range" min="40" max="800" step="10" value="160"></label>
+    <header><span class="eyebrow">IMPACT HUD · PULSE NETWORK</span><h1>Circuit Orbit<span> / 02</span></h1><p>Carrega. Dispara. Acende.</p></header>
+    <label>Cor dos efeitos <input id="accent" type="color" value="#49e5ff"></label>
+    <label>Velocidade do tiro <input id="speed" type="range" min="40" max="800" step="10" value="160"></label>
     <label>Brilho <input id="glow" type="range" min="10" max="100" value="70"></label>
-    <label>Rastro <input id="trail" type="range" min="60" max="700" value="180"></label>
-    <label>Tamanho do círculo (%) <input id="circleSize" type="range" min="40" max="200" step="5" value="100"></label>
+    <label>Rastro do tiro <input id="trail" type="range" min="60" max="700" value="180"></label>
+    <label>Tamanho do display (%) <input id="circleSize" type="range" min="40" max="200" step="5" value="100"></label>
+    <label>Tempo de carga (ms) <input id="chargeTime" type="range" min="300" max="2400" step="100" value="1000"></label>
+    <label>Persistência (tiros) <input id="lingerShots" type="range" min="2" max="8" step="1" value="4"></label>
+    <label>Quadros por segundo <select id="frameRate"><option value="0">30 FPS</option><option value="1" selected>60 FPS</option></select></label>
     <label>Área <select id="monitor"><option value="0">Automático</option><option value="1">Todos — área estendida</option></select></label>
     <label>Grade sutil <input id="grid" type="checkbox" checked></label>
     <button id="collectIcons">Coletar posições dos ícones</button>
@@ -24,6 +28,7 @@
     <button id="hide">Ocultar controles · tecla P para voltar</button>
   </section>
   <script src="engine.js"></script>
+  <script src="hud.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

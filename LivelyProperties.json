@@ -1,9 +1,12 @@
 {
-  "accent": { "text": "Cor do laser", "type": "color", "value": "#49e5ff" },
-  "speed": { "text": "Velocidade da luz", "type": "slider", "min": 40, "max": 800, "step": 10, "value": 160 },
+  "accent": { "text": "Cor dos efeitos", "type": "color", "value": "#49e5ff" },
+  "speed": { "text": "Velocidade do tiro", "type": "slider", "min": 40, "max": 800, "step": 10, "value": 160 },
   "glow": { "text": "Intensidade do brilho", "type": "slider", "min": 10, "max": 100, "step": 5, "value": 70 },
-  "trail": { "text": "Comprimento do rastro", "type": "slider", "min": 60, "max": 700, "step": 20, "value": 180 },
-  "circleSize": { "text": "Tamanho do círculo (%)", "type": "slider", "min": 40, "max": 200, "step": 5, "value": 100 },
+  "trail": { "text": "Rastro do tiro", "type": "slider", "min": 60, "max": 700, "step": 20, "value": 180 },
+  "circleSize": { "text": "Tamanho do display (%)", "type": "slider", "min": 40, "max": 200, "step": 5, "value": 100 },
+  "chargeTime": { "text": "Tempo de carga (ms)", "type": "slider", "min": 300, "max": 2400, "step": 100, "value": 1000 },
+  "lingerShots": { "text": "Persistência dos displays (tiros)", "type": "slider", "min": 2, "max": 8, "step": 1, "value": 4 },
+  "frameRate": { "text": "Quadros por segundo", "type": "dropdown", "value": 1, "items": ["30 FPS", "60 FPS"] },
   "monitor": { "text": "Área: automático / estendido / monitor", "type": "dropdown", "value": 0, "items": ["Automático", "Todos — área estendida", "Monitor 1 (principal)", "Monitor 2", "Monitor 3", "Monitor 4", "Monitor 5", "Monitor 6", "Monitor 7", "Monitor 8"] },
   "grid": { "text": "Mostrar grade sutil", "type": "checkbox", "value": true },
   "collectIcons": { "text": "Posições dos ícones", "type": "button", "value": "Coletar posições dos ícones" }
