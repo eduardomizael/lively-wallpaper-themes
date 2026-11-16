@@ -1,12 +1,14 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.0.0-beta.1`, branch `codex/impact-hud-v2`. A versão original está preservada na tag Git `v1.0.0`.
+Versão `2.0.0-beta.2`, branch `codex/impact-hud-v2`. A versão original está preservada na tag Git `v1.0.0`.
 
 ## Animação
 
 Um primeiro tiro entra pela borda da tela e atinge um ícone. Somente no impacto surgem os arcos, segmentos e marcadores do display. Os anéis giram em sentidos diferentes, o indicador interno carrega e o brilho se concentra antes do disparo seguinte.
 
-O destino é sorteado entre os outros ícones. Quando existem alternativas, o sorteio também evita voltar imediatamente ao ícone anterior. O tiro percorre uma reta com aceleração progressiva e termina em um clarão local com partículas curtas. Os displays anteriores continuam girando e se apagam depois de alguns impactos; o padrão é quatro. Não há circuito permanente, números sobre os ícones ou displays previamente acesos.
+O destino é sorteado de uma lista de ícones disponíveis e retirado dela. Todos são visitados uma vez antes de a lista ser preenchida novamente. Na passagem entre rodadas, o próximo destino não pode ser o próprio emissor. O tiro percorre uma reta com aceleração progressiva e termina em um clarão local com partículas curtas. Não há circuito permanente, números sobre os ícones ou displays previamente acesos.
+
+A permanência dos displays é uma porcentagem do número de ícones da área escolhida, de 1% a 99%, com padrão de 60%. Com dez ícones e 60%, o primeiro display permanece intacto até o sexto impacto e começa a desaparecer no sétimo. O limite é arredondado para baixo, com mínimo de um ícone: `max(1, floor(total × porcentagem / 100))`. O fade começa no impacto, não durante o voo, e dura 900 ms. Um novo impacto no mesmo ícone reacende seu display.
 
 Com um único ícone, o display recebe o tiro inicial e repete a carga local. Sem ícones no monitor, o fundo fica estático e a animação para.
 
@@ -30,7 +32,7 @@ O atalho da v2 é `circuit-orbit-v2://collect`, registrado somente no usuário a
 | Rastro do tiro | Comprimento do feixe atrás do projétil |
 | Tamanho do display | 40% a 200%, relativo ao tamanho do ícone |
 | Tempo de carga | 300 a 2400 ms antes do próximo disparo |
-| Persistência | Displays desaparecem após 2 a 8 impactos seguintes |
+| Permanência | 1% a 99% do total de ícones; define quando os marcadores antigos começam o fade |
 | Quadros por segundo | Limite de 30 ou 60 FPS; movimento baseado no tempo |
 | Área | Automático, área estendida ou monitor explícito |
 

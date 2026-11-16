@@ -1,4 +1,4 @@
-# Validação — Impact HUD 2.0.0-beta.1
+# Validação — Impact HUD 2.0.0-beta.2
 
 ## Testes locais
 
@@ -6,9 +6,9 @@
 
 - HUD inexistente antes do primeiro impacto e ativado somente na chegada.
 - Tiro em linha reta, com avanço crescente pela curva de aceleração.
-- Destinos sorteados sem atingir o próprio emissor; o retorno ao ícone anterior é evitado quando há alternativas.
+- Destinos retirados de uma lista de disponíveis; três rodadas consecutivas de dez ícones verificadas sem repetição interna ou autorrepetição na passagem entre rodadas.
 - Carga completa antes do disparo, sem salto de posição ao alterar a velocidade durante o voo.
-- Desvanecimento pela quantidade de impactos e descarte dos displays antigos.
+- Permanência percentual de 1% a 99%, com testes dos extremos. Para dez ícones e 60%, o primeiro display permanece intacto até o sexto impacto e começa o fade no sétimo, sem antecipar durante o voo.
 - Simulação prolongada com quantidade limitada de displays e partículas.
 - Casos sem ícones e com apenas um ícone.
 - Projeção com monitor em coordenadas negativas.

@@ -1,7 +1,7 @@
 {
   "AppVersion": "2.1.0.0",
   "Title": "Circuit Orbit · Impact HUD",
-  "Desc": "Impact HUD v2: disparos acelerados, destinos aleatórios, displays giratórios, carga e impacto. Os displays surgem apenas após o impacto e desaparecem depois de alguns tiros. Coleta manual de ícones, sem serviço.",
+  "Desc": "Impact HUD v2 beta 2: disparos acelerados e sorteio sem repetição até visitar todos os ícones. Permanência dos marcadores configurável de 1% a 99% do total de ícones. Coleta manual, sem serviço.",
   "Author": "Eduardo",
   "License": "",
   "Type": 1,

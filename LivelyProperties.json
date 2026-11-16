@@ -5,7 +5,7 @@
   "trail": { "text": "Rastro do tiro", "type": "slider", "min": 60, "max": 700, "step": 20, "value": 180 },
   "circleSize": { "text": "Tamanho do display (%)", "type": "slider", "min": 40, "max": 200, "step": 5, "value": 100 },
   "chargeTime": { "text": "Tempo de carga (ms)", "type": "slider", "min": 300, "max": 2400, "step": 100, "value": 1000 },
-  "lingerShots": { "text": "Persistência dos displays (tiros)", "type": "slider", "min": 2, "max": 8, "step": 1, "value": 4 },
+  "persistencePercent": { "text": "Permanência dos marcadores (% dos ícones)", "type": "slider", "min": 1, "max": 99, "step": 1, "value": 60 },
   "frameRate": { "text": "Quadros por segundo", "type": "dropdown", "value": 1, "items": ["30 FPS", "60 FPS"] },
   "monitor": { "text": "Área: automático / estendido / monitor", "type": "dropdown", "value": 0, "items": ["Automático", "Todos — área estendida", "Monitor 1 (principal)", "Monitor 2", "Monitor 3", "Monitor 4", "Monitor 5", "Monitor 6", "Monitor 7", "Monitor 8"] },
   "grid": { "text": "Mostrar grade sutil", "type": "checkbox", "value": true },

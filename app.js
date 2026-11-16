@@ -3,8 +3,8 @@
   const E = window.CircuitEngine, canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
   const controls = document.querySelector('#controls'), notice = document.querySelector('#notice');
   const params = new URLSearchParams(location.search), preview = params.has('preview'), demo = params.has('demo');
-  const config = { accent: '#49e5ff', speed: 160, glow: 70, trail: 180, circleSize: 100, chargeTime: 1000, lingerShots: 4, frameRate: 1, monitor: 0, grid: true };
-  const ranges = { speed: [40, 800], glow: [10, 100], trail: [60, 700], circleSize: [40, 200], chargeTime: [300, 2400], lingerShots: [2, 8], frameRate: [0, 1], monitor: [0, 9] };
+  const config = { accent: '#49e5ff', speed: 160, glow: 70, trail: 180, circleSize: 100, chargeTime: 1000, persistencePercent: 60, frameRate: 1, monitor: 0, grid: true };
+  const ranges = { speed: [40, 800], glow: [10, 100], trail: [60, 700], circleSize: [40, 200], chargeTime: [300, 2400], persistencePercent: [1, 99], frameRate: [0, 1], monitor: [0, 9] };
   let rgb = '73,229,255', map = null, system = null, width = 0, height = 0, signature = '', chosen = '';
   let framePending = false, lastDraw = null, nextDraw = 0, collecting = false;
   let collectionTimer = null, collectionDeadline = null, collectionStarted = 0;

@@ -23,25 +23,34 @@
     const progress = clamp(shot.elapsed / shot.duration, 0, 1) ** 2.6;
     return { x: shot.from.x + (shot.to.x - shot.from.x) * progress, y: shot.from.y + (shot.to.y - shot.from.y) * progress, progress };
   }
-  function stationOpacity(age, lifetime) {
-    const t = clamp((age - 1) / Math.max(1, lifetime - 1), 0, 1);
+  const retentionCount = (count, percent) => Math.max(1, Math.floor(count * clamp(percent, 1, 99) / 100));
+  function stationOpacity(elapsed, duration = .9) {
+    const t = clamp(elapsed / duration, 0, 1);
     return 1 - t * t * (3 - 2 * t);
   }
   class PulseSystem {
     constructor(icons, options = {}, random = Math.random) {
       this.icons = icons;
-      this.options = { width: 1920, height: 1080, speed: 160, chargeTime: 1000, lingerShots: 4, ...options };
+      this.options = { width: 1920, height: 1080, speed: 160, chargeTime: 1000, persistencePercent: 60, ...options };
       this.random = random;
       this.time = 0; this.sequence = 0; this.phase = 'idle'; this.charge = 0;
       this.current = null; this.previousId = null; this.shot = null;
       this.stations = new Map(); this.particles = [];
+      this.available = icons.slice(); this.round = 1;
       if (icons.length) {
-        const target = pickTarget(icons, null, null, random);
+        const target = this.takeTarget();
         const { width, height } = this.options;
         const edges = [{ x: -30, y: target.y }, { x: width + 30, y: target.y }, { x: target.x, y: -30 }, { x: target.x, y: height + 30 }];
         edges.sort((a, b) => distance(a, target) - distance(b, target));
         this.launch(edges[0], target, false);
       }
+    }
+    takeTarget() {
+      if (this.current && this.icons.length < 2) return null;
+      if (!this.available.length) { this.available = this.icons.slice(); this.round++; }
+      const target = pickTarget(this.available, this.current?.id, this.previousId, this.random);
+      if (target) this.available.splice(this.available.indexOf(target), 1);
+      return target;
     }
     setOptions(options) {
       const fraction = this.shot ? this.shot.elapsed / this.shot.duration : 0;
@@ -63,7 +72,7 @@
     impact(target) {
       this.sequence++;
       const existing = this.stations.get(target.id);
-      this.stations.set(target.id, { icon: target, lastHit: this.sequence, hitTime: this.time, emission: 0, spin: existing?.spin ?? this.random() * TAU });
+      this.stations.set(target.id, { icon: target, lastHit: this.sequence, hitTime: this.time, emission: 0, fadeStartedAt: null, spin: existing?.spin ?? this.random() * TAU });
       this.previousId = this.current?.id ?? null;
       this.current = target; this.shot = null; this.phase = 'charge'; this.charge = 0;
       for (let i = 0; i < 12; i++) {
@@ -82,22 +91,24 @@
       } else if (this.phase === 'charge') {
         this.charge = Math.min(1, this.charge + dt / (this.options.chargeTime / 1000));
         if (this.charge >= 1) {
-          const next = pickTarget(this.icons, this.current.id, this.previousId, this.random);
+          const next = this.takeTarget();
           if (next) this.launch(this.current, next);
           else { this.charge = 0; this.stations.get(this.current.id).emission = .16; }
         }
       }
       for (const [id, station] of this.stations) {
+        const age = this.sequence - station.lastHit;
+        if (age < retentionCount(this.icons.length, this.options.persistencePercent)) station.fadeStartedAt = null;
+        else if (station.fadeStartedAt === null) station.fadeStartedAt = this.time;
         if (id !== this.current?.id && this.opacity(station) <= 0) this.stations.delete(id);
       }
     }
     opacity(station) {
       if (station.icon.id === this.current?.id) return 1;
-      const fractionalShot = this.phase === 'flight' ? clamp(this.shot.elapsed / this.shot.duration, 0, 1) : 0;
-      return stationOpacity(this.sequence - station.lastHit + fractionalShot, this.options.lingerShots);
+      return station.fadeStartedAt === null ? 1 : stationOpacity(this.time - station.fadeStartedAt);
     }
   }
-  const api = { TAU, clamp, distance, virtualBounds, project, pickTarget, flightDuration, shotPosition, stationOpacity, PulseSystem };
+  const api = { TAU, clamp, distance, virtualBounds, project, pickTarget, flightDuration, shotPosition, retentionCount, stationOpacity, PulseSystem };
   if (typeof module !== 'undefined') module.exports = api;
   root.CircuitEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

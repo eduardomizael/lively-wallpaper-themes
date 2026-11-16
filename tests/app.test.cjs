@@ -34,6 +34,8 @@ for (let i = 0; i < 165; i++) { frame(clock); clock += 1000 / 165; }
 assert.ok(draws >= 29 && draws <= 31, `30 FPS cap: observed ${draws}`);
 assert.ok(Math.abs(simulationTime - 2) < .05, 'Switching FPS must not speed up or slow down the simulation');
 page.livelyPropertyListener('speed', 9999); assert.equal(element('#speed').value, 800);
+page.livelyPropertyListener('persistencePercent', 0); assert.equal(element('#persistencePercent').value, 1);
+page.livelyPropertyListener('persistencePercent', 100); assert.equal(element('#persistencePercent').value, 99);
 page.receiveDesktopMap({ ...snapshot, icons: [] }); draws = 0; frame(clock);
 assert.equal(draws, 0, 'An empty monitor stops redrawing');
 element('#collectIcons').onclick(); assert.equal(page.location.href, 'circuit-orbit-v2://collect'); assert.ok(interval); assert.ok(deadline);
