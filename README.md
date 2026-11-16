@@ -1,6 +1,6 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.1.0-beta.1`, branch `codex/ambiente-energia`. A versão anterior está preservada na branch `codex/impact-hud-v2` e a versão original na tag Git `v1.0.0`.
+Versão `2.1.0-beta.2`, branch `codex/ambiente-energia`. A versão anterior está preservada na branch `codex/impact-hud-v2` e a versão original na tag Git `v1.0.0`.
 
 ## Animação
 
@@ -19,6 +19,10 @@ Com um único ícone, o display recebe o tiro inicial e repete a carga local. Se
 Três nuvens difusas em ciano e azul se deslocam lentamente ao fundo. Poucas partículas atravessam a tela em profundidades e velocidades diferentes. Cada impacto em um ícone produz uma onda suave que ilumina uma área maior e desaparece em 1,6 segundo. O ambiente usa a cor escolhida nos efeitos e não altera a rampa, a ordem das visitas nem os marcadores.
 
 Os efeitos são independentes: coloque a intensidade ou a quantidade em zero para desligar névoa, partículas ou ondas. Padrões: névoa 45%, 32 partículas e ondas 40%. Não há núcleo central nem filamentos adicionais.
+
+O movimento do mouse perturba o campo: uma nuvem pequena segue com cerca de 85 ms de atraso, deixa um rastro difuso e se dissipa em aproximadamente um segundo após parar. As partículas próximas se afastam levemente e depois retomam o fluxo. O primeiro evento apenas localiza o ponteiro; coordenadas repetidas com o mouse parado não mantêm um halo. Saltos entre monitores não geram uma trilha atravessando a tela.
+
+A entrada usa os [eventos JavaScript normais encaminhados pelo Lively](https://github.com/lively-community/lively/wiki/Web-Guide-IV-%3A-Interaction#mouse--keyboard), em coordenadas locais da janela, sem consultar a posição global do mouse ou iniciar utilitário. Depende da entrada de mouse habilitada no Lively. Mover o cursor sobre os controles da prévia não alimenta o efeito.
 
 ## Configurar e abrir
 
@@ -46,6 +50,9 @@ O atalho da v2 é `circuit-orbit-v2://collect`, registrado somente no usuário a
 | Névoa de energia | Intensidade de 0% a 100% |
 | Partículas de energia | Quantidade de 0 a 70, em camadas |
 | Ondas de impacto | Intensidade de 0% a 100% |
+| Névoa do mouse | Habilita ou desliga a reação ao cursor |
+| Intensidade do mouse | 0% a 100%, padrão 35% |
+| Tamanho da nuvem | 60 a 300 px, padrão 160 px |
 
 As alterações da prévia são temporárias; o Lively persiste suas próprias opções. Para simular sem mapa real, abra `index.html?preview&demo`; a tela informa **DEMONSTRAÇÃO**.
 
@@ -66,6 +73,7 @@ O leitor usa retângulos físicos, inclusive coordenadas negativas. O tema proje
 - Fundo base e grade são CSS estático. A névoa reutiliza três texturas de 256×256 em uma camada limitada a 960×540 pixels, atualizada no máximo 20 vezes por segundo. Não há reconstrução de gradientes de tela inteira em cada quadro.
 - Não há histórico crescente de trilhas: somente os displays recentes, partículas curtas e um tiro ativo são mantidos.
 - O limite de FPS não altera a velocidade da simulação. Há no máximo 70 partículas ambientais e seis ondas simultâneas; as ondas expiram. Um monitor sem ícones e sem ambiente ativo não mantém um laço de desenho.
+- O cursor reutiliza a textura da névoa e mantém no máximo dezesseis amostras do rastro. A reação acorda uma cena parada e deixa de redesenhar quando se dissipa, caso não haja outros efeitos ativos.
 
 Essas alterações reduzem trabalho desnecessário identificado na v1. O ganho real de CPU/GPU ainda precisa ser medido. `ANALISE_DE_DESEMPENHO.md` é o relatório histórico da v1, não uma medição desta versão.
 

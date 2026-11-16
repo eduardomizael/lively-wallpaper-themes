@@ -12,5 +12,8 @@
   "fogStrength": { "text": "Névoa de energia (%)", "type": "slider", "min": 0, "max": 100, "step": 5, "value": 45 },
   "dustCount": { "text": "Partículas de energia", "type": "slider", "min": 0, "max": 70, "step": 1, "value": 32 },
   "impactStrength": { "text": "Ondas de impacto (%)", "type": "slider", "min": 0, "max": 100, "step": 5, "value": 40 },
+  "mouseFog": { "text": "Névoa do mouse", "type": "checkbox", "value": true },
+  "mouseFogStrength": { "text": "Intensidade da névoa do mouse (%)", "type": "slider", "min": 0, "max": 100, "step": 5, "value": 35 },
+  "mouseFogSize": { "text": "Tamanho da nuvem do mouse (px)", "type": "slider", "min": 60, "max": 300, "step": 10, "value": 160 },
   "collectIcons": { "text": "Posições dos ícones", "type": "button", "value": "Coletar posições dos ícones" }
 }

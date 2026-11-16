@@ -26,4 +26,22 @@ A.drawFog(ctx,field,sprites,0);
 A.drawDetails(ctx,field,sprites,{dustCount:0,impactStrength:0},a=>String(a));
 assert.equal(images, 0); assert.equal(points, 0);
 assert.equal(ctx.globalAlpha, 1);
+const mouseOnly = {fogStrength:0,dustCount:0,mouseFog:true,mouseFogStrength:35,mouseFogSize:160};
+assert.equal(field.movePointer(100,100), false, 'First event only establishes the cursor position');
+assert.equal(field.moving(mouseOnly), false);
+assert.equal(field.movePointer(180,150), true);
+assert.equal(field.moving(mouseOnly), true, 'Mouse movement wakes a static scene');
+field.update(.016);
+assert.ok(field.cursor.x > 100 && field.cursor.x < 180, 'Cloud follows with a small lag');
+assert.ok(field.cursor.strength > 0);
+for (let i=0;i<150;i++) { field.movePointer(180,150); field.update(.016); }
+assert.equal(field.cursor.strength, 0, 'Repeated stationary input cannot sustain a halo');
+assert.equal(field.cursorPuffs.length, 0);
+assert.equal(field.moving(mouseOnly), false, 'Scene can sleep again after the cloud dissipates');
+for (let i=0;i<1000;i++) { field.movePointer(200+Math.sin(i*.1)*50,200); field.update(.016); assert.ok(field.cursorPuffs.length <= 16); }
+field.movePointer(1900,1000);
+assert.equal(field.cursorPuffs.length, 0, 'A jump to another monitor does not draw a connecting trail');
+assert.equal(field.cursor.strength, 0);
+assert.equal(field.movePointer(-1,200), false, 'Off-screen coordinates do not emit clouds');
+field.resize(1280,720); assert.equal(field.cursor,null); assert.equal(field.cursorPuffs.length,0);
 console.log('Nevoa em cache, particulas limitadas, ondas finitas e controles: OK');

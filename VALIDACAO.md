@@ -1,4 +1,4 @@
-# Validação — Impact HUD 2.1.0-beta.1
+# Validação — Impact HUD 2.1.0-beta.2
 
 ## Testes locais
 
@@ -37,3 +37,11 @@ O relatório `ANALISE_DE_DESEMPENHO.md` refere-se à v1. Não há comparação q
 Prévia no Chrome com o mapa real de 90 ícones: névoa e onda de impacto visíveis, com controles separados para os três efeitos. Controles desligados e restaurados aos padrões; sem erros/avisos no console observado. O custo real de CPU/GPU da nova camada ainda não foi medido.
 
 A instalação conferiu os quinze arquivos de execução, preservou as opções existentes e recarregou uma instância ativa da v2 no Lively. O mapa salvo foi preservado e os novos controles foram acrescentados ao arquivo de propriedades. A miniatura de seis segundos foi regenerada e todos os seus 120 quadros foram decodificados para conferir integridade. O servidor temporário de prévia foi encerrado.
+
+## Névoa do mouse
+
+- Testes para atraso de acompanhamento, dissipação mesmo com eventos repetidos de coordenadas estacionárias, despertar de uma cena parada e retorno ao repouso.
+- Rastro limitado a dezesseis amostras; saltos grandes e coordenadas fora da janela não deixam uma conexão entre monitores. Redimensionar a janela limpa a reação anterior.
+- Controles de habilitação, intensidade e tamanho, incluindo desligamento sem capturar movimentos e limite de tamanho.
+- Movimento do cursor exercitado na prévia do Chrome; nuvem observada, opção desligada e ligada novamente, sem erros/avisos no console. Captura: `outputs/previa-nevoa-mouse.png`.
+- A miniatura usa uma trajetória de cursor sintética, sem capturar movimentos pessoais. O comportamento físico em telas com escalas diferentes ainda depende de conferência no desktop. Não foi feita medição de consumo específica desta reação.

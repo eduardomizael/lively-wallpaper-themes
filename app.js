@@ -4,8 +4,8 @@
   const A = window.CircuitAtmosphere, fogCanvas = document.querySelector('#atmosphere'), fogCtx = fogCanvas.getContext('2d');
   const controls = document.querySelector('#controls'), notice = document.querySelector('#notice');
   const params = new URLSearchParams(location.search), preview = params.has('preview'), demo = params.has('demo');
-  const config = { accent: '#49e5ff', speed: 160, glow: 70, trail: 180, circleSize: 100, chargeTime: 1000, persistencePercent: 60, frameRate: 1, monitor: 0, grid: true, fogStrength: 45, dustCount: 32, impactStrength: 40 };
-  const ranges = { speed: [40, 800], glow: [10, 100], trail: [60, 700], circleSize: [40, 200], chargeTime: [300, 2400], persistencePercent: [1, 99], frameRate: [0, 1], monitor: [0, 9], fogStrength: [0, 100], dustCount: [0, 70], impactStrength: [0, 100] };
+  const config = { accent: '#49e5ff', speed: 160, glow: 70, trail: 180, circleSize: 100, chargeTime: 1000, persistencePercent: 60, frameRate: 1, monitor: 0, grid: true, fogStrength: 45, dustCount: 32, impactStrength: 40, mouseFog: true, mouseFogStrength: 35, mouseFogSize: 160 };
+  const ranges = { speed: [40, 800], glow: [10, 100], trail: [60, 700], circleSize: [40, 200], chargeTime: [300, 2400], persistencePercent: [1, 99], frameRate: [0, 1], monitor: [0, 9], fogStrength: [0, 100], dustCount: [0, 70], impactStrength: [0, 100], mouseFogStrength: [0, 100], mouseFogSize: [60, 300] };
   let rgb = '73,229,255', map = null, system = null, width = 0, height = 0, signature = '', chosen = '';
   let framePending = false, lastDraw = null, nextDraw = 0, collecting = false;
   let collectionTimer = null, collectionDeadline = null, collectionStarted = 0;
@@ -75,12 +75,13 @@
     if (name === 'collectIcons') { collectIcons(); return; }
     if (!(name in config)) return;
     if (name === 'accent') { if (!/^#[\da-f]{6}$/i.test(value)) return; }
-    else if (name === 'grid') value = value === true || value === 'true';
+    else if (name === 'grid' || name === 'mouseFog') value = value === true || value === 'true';
     else { value = Number(value); if (!Number.isFinite(value)) return; value = E.clamp(value, ...ranges[name]); }
     config[name] = value;
     if (name === 'accent') sprites = A.createSprites(makeCanvas, config.accent);
     if (name === 'accent' || name === 'fogStrength') fogDirty = true;
     if (name === 'impactStrength' && !value) field.waves = [];
+    if ((name === 'mouseFog' || name === 'mouseFogStrength') && !value) field.clearPointer();
     rgb = [1, 3, 5].map(start => parseInt(config.accent.slice(start, start + 2), 16)).join(',');
     document.documentElement.style.setProperty('--accent', config.accent);
     document.documentElement.style.setProperty('--grid-color', rgba(.09));
@@ -119,6 +120,12 @@
   for (const input of controls.querySelectorAll('input,select')) input.addEventListener('input', () => apply(input.id, input.type === 'checkbox' ? input.checked : input.value));
   document.querySelector('#hide').onclick = () => { controls.hidden = true; };
   addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') controls.hidden = !controls.hidden; });
+  addEventListener('mousemove', event => {
+    if (!config.mouseFog || !config.mouseFogStrength || event.target?.closest?.('#controls')) { field.leavePointer(); return; }
+    if (field.movePointer(event.clientX, event.clientY)) schedule();
+  });
+  addEventListener('mouseleave', () => field.leavePointer());
+  addEventListener('blur', () => field.leavePointer());
   function frame(now) {
     framePending = false;
     if (!system?.icons.length && !field.moving(config)) { ctx.clearRect(0, 0, width, height); return; }

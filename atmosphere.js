@@ -4,20 +4,55 @@
   class Atmosphere {
     constructor(width, height) {
       this.width = width; this.height = height; this.time = 0; this.waves = [];
+      this.cursor = null; this.cursorPuffs = []; this.lastPuff = -1;
       let seed = 9917;
       const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
       this.dust = Array.from({ length: 70 }, () => ({ x: random(), y: random(), depth: random(), phase: random() * TAU, drift: random() * .7 + .3 }));
     }
-    resize(width, height) { this.width = width; this.height = height; }
+    resize(width, height) { this.width = width; this.height = height; this.clearPointer(); }
+    clearPointer() { this.cursor = null; this.cursorPuffs = []; this.lastPuff = -1; }
+    leavePointer() { if (this.cursor) this.cursor.lastMove = this.time - 1.1; }
+    movePointer(x, y) {
+      if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 || x > this.width || y > this.height) { this.leavePointer(); return false; }
+      if (!this.cursor) {
+        this.cursor = { x, y, targetX: x, targetY: y, lastMove: this.time - 2, strength: 0, energy: 0 };
+        return false;
+      }
+      const p = this.cursor, distance = Math.hypot(x - p.targetX, y - p.targetY);
+      if (distance < .35) return false; // Repeated stationary input must not create a permanent halo.
+      if (distance > Math.max(160, Math.min(this.width, this.height) * .35)) {
+        this.clearPointer(); return this.movePointer(x, y);
+      }
+      p.targetX = x; p.targetY = y; p.lastMove = this.time;
+      p.energy = Math.min(1, p.energy + .08 + distance * .008);
+      return true;
+    }
     update(dt) {
       this.time += Math.max(0, dt);
       this.waves = this.waves.filter(wave => this.time - wave.started < 1.6);
+      this.cursorPuffs = this.cursorPuffs.filter(puff => this.time - puff.started < 1);
+      if (this.cursor) {
+        const p = this.cursor, follow = 1 - Math.exp(-Math.max(0, dt) / .085);
+        p.x += (p.targetX - p.x) * follow; p.y += (p.targetY - p.y) * follow;
+        const activity = Math.max(0, 1 - (this.time - p.lastMove) / 1.05);
+        p.energy *= Math.exp(-Math.max(0, dt) * .5);
+        p.strength += (activity * p.energy - p.strength) * (1 - Math.exp(-Math.max(0, dt) / .09));
+        if (this.time - p.lastMove > 1.4 && p.strength < .005) p.strength = 0;
+        if (p.strength > .03 && this.time - p.lastMove < .18 && this.time - this.lastPuff >= .05) {
+          this.cursorPuffs.push({ x: p.x, y: p.y, started: this.time, strength: p.strength });
+          if (this.cursorPuffs.length > 16) this.cursorPuffs.shift();
+          this.lastPuff = this.time;
+        }
+      }
     }
     impact(icon) {
       this.waves.push({ x: icon.x, y: icon.y, radius: icon.radius, started: this.time });
       if (this.waves.length > 6) this.waves.shift();
     }
-    moving(config) { return config.fogStrength > 0 || config.dustCount > 0 || this.waves.length > 0; }
+    moving(config) {
+      const pointerActive = config.mouseFog && config.mouseFogStrength > 0 && ((this.cursor?.energy > 0 && this.time - this.cursor.lastMove < 1.1) || (this.cursor?.strength || 0) > .003 || this.cursorPuffs.length > 0);
+      return Boolean(config.fogStrength > 0 || config.dustCount > 0 || this.waves.length > 0 || pointerActive);
+    }
   }
   function createSprites(makeCanvas, accent) {
     const rgb = [1, 3, 5].map(i => parseInt(accent.slice(i, i + 2), 16));
@@ -54,12 +89,33 @@
     const count = Math.min(70, Math.max(0, Math.floor(config.dustCount)));
     for (let i = 0; i < count; i++) {
       const p = field.dust[i], speed = 4 + p.depth * 10;
-      const x = ((p.x * w + t * speed * p.drift) % (w + 20)) - 10;
-      const y = ((p.y * h - t * speed * .35) % (h + 20) + h + 20) % (h + 20) - 10;
+      let x = ((p.x * w + t * speed * p.drift) % (w + 20)) - 10;
+      let y = ((p.y * h - t * speed * .35) % (h + 20) + h + 20) % (h + 20) - 10;
+      if (config.mouseFog && config.mouseFogStrength > 0 && field.cursor?.strength > .003) {
+        const dx = x - field.cursor.x, dy = y - field.cursor.y, distance = Math.hypot(dx, dy);
+        const reach = config.mouseFogSize * .65;
+        if (distance > 0 && distance < reach) {
+          const push = (1 - distance / reach) ** 2 * 12 * field.cursor.strength * config.mouseFogStrength / 100;
+          x += dx / distance * push; y += dy / distance * push;
+        }
+      }
       const alpha = (.15 + p.depth * .2) * (.8 + Math.sin(t * .7 + p.phase) * .2);
       ctx.fillStyle = rgba(alpha);
       const size = .7 + p.depth * 1.1;
       ctx.fillRect(x, y, size, size);
+    }
+    if (config.mouseFog && config.mouseFogStrength > 0) {
+      const amount = config.mouseFogStrength / 100, size = config.mouseFogSize;
+      for (const puff of field.cursorPuffs) {
+        const age = Math.min(1, (t - puff.started)), expansion = 1 + age * .35;
+        ctx.globalAlpha = amount * puff.strength * (1 - age) ** 2 * .12;
+        ctx.drawImage(sprites.cloud, puff.x - size * expansion * .5, puff.y - size * expansion * .42, size * expansion, size * expansion * .84);
+      }
+      if (field.cursor?.strength > .003) {
+        ctx.globalAlpha = amount * field.cursor.strength * .65;
+        ctx.drawImage(sprites.cloud, field.cursor.x - size * .5, field.cursor.y - size * .42, size, size * .84);
+      }
+      ctx.globalAlpha = 1;
     }
     if (config.impactStrength > 0) {
       for (const wave of field.waves) {

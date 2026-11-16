@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict'), vm = require('node:vm'), fs = require('node:fs'), path = require('node:path');
 const E = require('../engine.js');
-let frame, interval, deadline, draws = 0, clock = 0, simulationTime = 0;
+let frame, interval, deadline, draws = 0, clock = 0, simulationTime = 0, requests = 0;
+const events = {};
 const elements = new Map(), arcs = [];
 const gradient = { addColorStop() {} };
 const ctx = new Proxy({ arc: (...args) => arcs.push(args), createRadialGradient: () => gradient, createLinearGradient: () => gradient }, { get: (t, k) => t[k] || (() => {}) });
@@ -12,7 +13,7 @@ const page = {
   CircuitEngine: E, URLSearchParams, console, Date, Math,
   innerWidth: 1000, innerHeight: 800, devicePixelRatio: 1, screen: { width: 1000, height: 800 }, location: { search: '?preview', href: '' },
   document: { querySelector: element, getElementById: id => element('#' + id), createElement: tag => tag === 'canvas' ? { getContext: () => ctx } : { remove() {} }, head: { appendChild() {} }, documentElement: { style: { setProperty() {} } }, body: { classList: { toggle() {} } } },
-  addEventListener() {}, requestAnimationFrame: callback => { frame = callback; },
+  addEventListener: (type,callback) => { events[type]=callback; }, requestAnimationFrame: callback => { frame = callback; requests++; },
   setInterval: callback => { interval = callback; return 1; }, setTimeout: callback => { deadline = callback; return 2; }, clearInterval: () => { interval = null; }, clearTimeout: () => { deadline = null; },
   Option: function(text, value) { this.text = text; this.value = value; this.dataset = {}; }
 };
@@ -42,6 +43,16 @@ assert.equal(draws, 0, 'An empty monitor draws only the atmosphere, not HUDs');
 page.livelyPropertyListener('fogStrength', 0); page.livelyPropertyListener('dustCount', 0); page.livelyPropertyListener('impactStrength', 0);
 frame(clock + 100);
 assert.equal(draws, 0, 'An empty monitor with atmosphere disabled stops redrawing');
+const beforePointer = requests;
+events.mousemove({clientX:100,clientY:100});
+events.mousemove({clientX:130,clientY:120});
+assert.ok(requests > beforePointer, 'Pointer movement starts drawing even with other atmosphere disabled');
+frame(clock + 120);
+page.livelyPropertyListener('mouseFog',false);
+const disabledRequests = requests;
+events.mousemove({clientX:160,clientY:140});
+assert.equal(requests, disabledRequests, 'Disabling the effect ignores mouse movement');
+page.livelyPropertyListener('mouseFogSize',9999); assert.equal(element('#mouseFogSize').value,300);
 element('#collectIcons').onclick(); assert.equal(page.location.href, 'circuit-orbit-v2://collect'); assert.ok(interval); assert.ok(deadline);
 page.receiveCollectionResult({ completedAt: new Date(Date.now() + 1000).toISOString(), ok: true, map: snapshot });
 assert.equal(interval, null); assert.equal(deadline, null); assert.match(element('#collectStatus').textContent, /Mapa salvo/);

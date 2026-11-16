@@ -3,7 +3,7 @@
   "Title": "Circuit Orbit · Impact HUD",
   "Thumbnail": "thumbnail.jpg",
   "Preview": "preview.gif",
-  "Desc": "Impact HUD 2.1: névoa de energia, partículas em camadas e ondas suaves nos impactos. Tiros com rampa de 80 ms, sorteio por rodadas e permanência percentual dos displays. Coleta manual, sem serviço.",
+  "Desc": "Impact HUD 2.1 beta 2: névoa sutil reage ao movimento do mouse, com atraso e dissipação. Ambiente de energia, partículas e ondas nos impactos. Coleta manual de ícones, sem serviço.",
   "Author": "Eduardo",
   "License": "",
   "Type": 1,
