@@ -17,6 +17,8 @@ Velocidade máxima ampliada de 500 para 800 na prévia, na biblioteca do Lively 
 
 ## Leitura real pontual
 
+Esta leitura inicial é histórica. A medição controlada foi concluída posteriormente e está na seção **Medição concluída** abaixo.
+
 Antes da desconexão da tela principal, os contadores WMI retornaram:
 
 | Processo | CPU, em equivalentes de um processador lógico | Memória residente privada |
@@ -31,7 +33,30 @@ São leituras pontuais, não médias de um ensaio controlado. Elas mostram ativi
 
 ## Interrupção da medição
 
-O registro do Lively informou a desconexão de DISPLAY1, de 3440×1440, e o encerramento do player. Ficou disponível a tela de 1920×1080. Por isso, a comparação planejada entre 160 e 800 não foi concluída; os números acima não devem ser apresentados como uma medição na velocidade 800.
+Na primeira tentativa, o registro do Lively informou a desconexão de DISPLAY1, de 3440×1440, e o encerramento do player. Ficou disponível a tela de 1920×1080. A tentativa foi interrompida. Depois do retorno da tela e da confirmação da área de trabalho visível, a medição foi repetida com os resultados abaixo.
+
+## Medição concluída
+
+Tema **v1**, ativo no Lively/WebView2, na tela **3440×1440 / 165 Hz**, com 12 processadores lógicos. Foram registradas quinze amostras por condição, em aproximadamente 21 segundos por velocidade, com a área de trabalho visível. O limite de 800 exigiu recarregar a mesma v1, pois o Lively ainda mantinha o limite antigo de 500 em memória. As demais opções foram preservadas e a velocidade original de 160 foi restaurada ao final.
+
+| Métrica | Velocidade 160 | Velocidade 800 |
+| --- | ---: | ---: |
+| Duração | 20,83 s | 20,62 s |
+| CPU média, percentual da capacidade total | 8,55% | 7,96% |
+| Pico de CPU entre amostras | 9,46% | 9,02% |
+| CPU do renderer, capacidade total | 1,49% | 1,52% |
+| CPU do processo GPU, capacidade total | 7,03% | 6,44% |
+| RAM residente privada média | 167,55 MiB | 171,31 MiB |
+| Pico de RAM residente privada | 173,43 MiB | 174,57 MiB |
+| Memória privada comprometida média | 368,99 MiB | 374,25 MiB |
+| Motor 3D mais ocupado do processo GPU, média | 14,40% | 14,47% |
+| Pico observado nesse motor 3D | 16% | 16% |
+
+CPU e memória somam a árvore do player deste wallpaper; não incluem a interface principal do Lively, outros aplicativos, RAM compartilhada ou VRAM. Os percentuais de CPU foram calculados pelo tempo de processador consumido dividido pelo intervalo e pelos doze processadores lógicos. A GPU corresponde ao contador do motor 3D associado ao processo gráfico do WebView2, não ao uso global da placa por todos os programas. A frequência real de quadros não foi medida.
+
+**Interpretação:** o consumo ficou na mesma faixa nas duas velocidades, aproximadamente um processador lógico ocupado em média. A maior parcela de CPU apareceu no processo GPU do navegador. Isso é coerente com o custo de renderização identificado no código, mas não isola causalmente cada efeito. O ensaio não mostra aumento proporcional de consumo ao passar de 160 para 800; a pequena diferença de CPU não prova que 800 seja mais econômico.
+
+São ensaios curtos, executados em sequência após uma recarga, com o histórico da trilha em evolução e outros programas abertos. Não substituem um teste prolongado nem demonstram ausência de vazamento de memória. Os dados brutos ficam em `outputs/performance-lively.json`. A v2 não estava ativa e não foi medida.
 
 ## Custo observado no código
 
