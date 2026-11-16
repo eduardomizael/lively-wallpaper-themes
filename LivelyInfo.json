@@ -3,7 +3,7 @@
   "Title": "Circuit Orbit · Impact HUD",
   "Thumbnail": "thumbnail.jpg",
   "Preview": "preview.gif",
-  "Desc": "Impact HUD 2.1 beta 3: névoa em resolução maior, transições suavizadas e reação do mouse mais difusa. Ambiente de energia, partículas e ondas nos impactos. Coleta manual, sem serviço.",
+  "Desc": "Impact HUD 2.2: fumaça fluida reage ao mouse com redemoinhos, inspirada no tema Fluids. Ambiente de energia e displays dos ícones. Coleta manual, sem serviço. Shaders de fluido: Pavel Dobryakov (MIT).",
   "Author": "Eduardo",
   "License": "",
   "Type": 1,

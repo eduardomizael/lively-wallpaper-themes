@@ -9,7 +9,7 @@ fs.mkdirSync(out, { recursive: true });
 let seed = 8041;
 const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 const icons = [[105,125],[300,100],[495,130],[535,265],[320,275],[100,265]].map(([x,y],id) => ({ id, x, y, radius: 21 }));
-const config = { accent: '#49e5ff', glow: 90, trail: 110, fogStrength: 45, dustCount: 32, impactStrength: 40, mouseFog:true, mouseFogStrength:35, mouseFogSize:260 };
+const config = { accent: '#49e5ff', glow: 90, trail: 110, fogStrength: 45, dustCount: 32, impactStrength: 40, mouseFog:false, mouseFogStrength:35, mouseFogSize:260 };
 const system = new E.PulseSystem(icons, { width: 640, height: 360, speed: 210, chargeTime: 650, persistencePercent: 60 }, random);
 let commands = [], currentPath = [];
 const ctx = {
@@ -38,9 +38,7 @@ const sprites = A.createSprites((width,height) => {
   return { assetId,getContext:()=>({createRadialGradient:ctx.createRadialGradient,createImageData:(w,h)=>({width:w,height:h,data:new Uint8ClampedArray(w*h*4)}),putImageData(image){asset.rgbaBase64=Buffer.from(image.data).toString('base64');},fillRect(x,y,w,h){asset.commands.push({op:'rect',rect:[x,y,w,h],style:this.fillStyle})}}) };
 },config.accent);
 function step() {
-  // A generic pointer path illustrates the interaction without capturing the user's cursor.
-  const time = field.time;
-  field.movePointer(320 + Math.sin(time * .8) * 160, 185 + Math.sin(time * 1.2) * 55);
+  // The catalogue thumbnail illustrates the HUD/ambient scene; mouse fluid needs a live WebGL context.
   field.update(1/20); const previous = system.sequence;
   system.update(1/20);
   if (system.sequence !== previous) field.impact(system.current);

@@ -112,7 +112,7 @@
     if (!sprites.grainPattern) sprites.grainPattern = ctx.createPattern(sprites.grain, 'repeat');
     ctx.fillStyle = sprites.grainPattern; ctx.fillRect(0, 0, w, h);
   }
-  function drawDetails(ctx, field, sprites, config, rgba) {
+  function drawDetails(ctx, field, sprites, config, rgba, fluidMouseActive = false) {
     const { width: w, height: h, time: t } = field;
     const count = Math.min(70, Math.max(0, Math.floor(config.dustCount)));
     for (let i = 0; i < count; i++) {
@@ -132,7 +132,7 @@
       const size = .7 + p.depth * 1.1;
       ctx.fillRect(x, y, size, size);
     }
-    if (config.mouseFog && config.mouseFogStrength > 0) {
+    if (!fluidMouseActive && config.mouseFog && config.mouseFogStrength > 0) {
       const amount = config.mouseFogStrength / 100, size = config.mouseFogSize;
       for (const puff of field.cursorPuffs) {
         const age = Math.min(1, (t - puff.started)), expansion = 1 + age * .35;

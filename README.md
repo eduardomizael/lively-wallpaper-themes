@@ -1,6 +1,6 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.1.0-beta.3`, branch `codex/ambiente-energia`. A versão anterior está preservada na branch `codex/impact-hud-v2` e a versão original na tag Git `v1.0.0`.
+Versão `2.2.0-beta.1`, branch `codex/ambiente-energia`. A versão anterior está preservada na branch `codex/impact-hud-v2` e a versão original na tag Git `v1.0.0`.
 
 ## Animação
 
@@ -20,9 +20,9 @@ Três nuvens difusas em ciano e azul se deslocam lentamente ao fundo. Poucas par
 
 Os efeitos são independentes: coloque a intensidade ou a quantidade em zero para desligar névoa, partículas ou ondas. Padrões: névoa 45%, 32 partículas e ondas 40%. Não há núcleo central nem filamentos adicionais.
 
-O movimento do mouse perturba o campo: uma nuvem pequena segue com cerca de 85 ms de atraso, deixa um rastro difuso e se dissipa em aproximadamente um segundo após parar. As partículas próximas se afastam levemente e depois retomam o fluxo. O primeiro evento apenas localiza o ponteiro; coordenadas repetidas com o mouse parado não mantêm um halo. Saltos entre monitores não geram uma trilha atravessando a tela.
+O mouse injeta fumaça em uma simulação de fluido WebGL2, adaptada dos shaders do tema local Fluids, de Pavel Dobryakov (MIT). A velocidade do movimento produz redemoinhos, filamentos e bordas irregulares. A fumaça se deforma e se dissipa em até 2,4 segundos após parar. As partículas próximas continuam reagindo ao cursor. Coordenadas repetidas não mantêm um halo; saltos grandes entre monitores não criam uma trilha atravessando a tela.
 
-A névoa usa perfis contínuos com lóbulos suaves e arredondamento estocástico da transparência, além de uma granulação fixa inferior a 1% para reduzir faixas de luminosidade em fundos escuros. A nuvem do mouse possui um perfil próprio, com brilho central menor e distribuição mais larga. Seu tamanho padrão passou de 160 para 260 px; valores personalizados são preservados na atualização.
+A névoa ambiente mantém as texturas procedurais suaves e a granulação discreta para reduzir faixas de luminosidade. A fumaça do mouse usa uma camada própria, com intensidade padrão de 35% e tamanho de 260 px. Sem WebGL2 com buffers de ponto flutuante, há uma alternativa 2D simplificada. Os créditos e a licença estão em licenses/Fluids-MIT.txt.
 
 A entrada usa os [eventos JavaScript normais encaminhados pelo Lively](https://github.com/lively-community/lively/wiki/Web-Guide-IV-%3A-Interaction#mouse--keyboard), em coordenadas locais da janela, sem consultar a posição global do mouse ou iniciar utilitário. Depende da entrada de mouse habilitada no Lively. Mover o cursor sobre os controles da prévia não alimenta o efeito.
 
@@ -75,7 +75,7 @@ O leitor usa retângulos físicos, inclusive coordenadas negativas. O tema proje
 - Fundo base e grade são CSS estático. A névoa reutiliza texturas de nuvem de 512×512, em uma camada que acompanha a densidade da tela até 3840×2160 pixels, atualizada no máximo 20 vezes por segundo. A onda usa uma textura de 256×256 e a granulação uma de 64×64. Não há reconstrução de gradientes de tela inteira em cada quadro. A resolução maior pode elevar o custo da camada; não foi medido um ganho de desempenho nesta revisão.
 - Não há histórico crescente de trilhas: somente os displays recentes, partículas curtas e um tiro ativo são mantidos.
 - O limite de FPS não altera a velocidade da simulação. Há no máximo 70 partículas ambientais e seis ondas simultâneas; as ondas expiram. Um monitor sem ícones e sem ambiente ativo não mantém um laço de desenho.
-- O cursor reutiliza a textura da névoa e mantém no máximo dezesseis amostras do rastro. A reação acorda uma cena parada e deixa de redesenhar quando se dissipa, caso não haja outros efeitos ativos.
+- mouse-fluid.js: fluido do cursor a até 30 atualizações por segundo, grade de velocidade de 128 pixels no lado curto e densidade de 384, limitadas a 1024 no lado longo. Dez iterações de pressão; sem bloom ou laço separado. A fila tem no máximo doze entradas. Após 2,4 segundos sem movimento, limpa a camada e suspende os cálculos do fluido. O custo real desta simulação na GPU ainda não foi medido.
 
 Essas alterações reduzem trabalho desnecessário identificado na v1. O ganho real de CPU/GPU ainda precisa ser medido. `ANALISE_DE_DESEMPENHO.md` é o relatório histórico da v1, não uma medição desta versão.
 
@@ -89,6 +89,7 @@ Para regenerar: execute `node tools/Build-Thumbnail.cjs`, depois `python tools/R
 node tests/engine.test.cjs
 node tests/app.test.cjs
 node tests/atmosphere.test.cjs
+node tests/mouse-fluid.test.cjs
 ```
 
 Os testes cobrem impacto antes de acender o HUD, carga, aceleração, destinos sem autorrepetição, desvanecimento, limites de objetos, monitores vazios/únicos, coordenadas negativas, limites de FPS e coleta pontual. A validação no navegador e os limites da validação física estão em `VALIDACAO.md`.

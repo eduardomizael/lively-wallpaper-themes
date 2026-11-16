@@ -10,12 +10,13 @@
   let framePending = false, lastDraw = null, nextDraw = 0, collecting = false;
   let collectionTimer = null, collectionDeadline = null, collectionStarted = 0;
   const field = new A.Atmosphere(1, 1);
+  const fluid = new window.CircuitMouseFluid.MouseFluid(document.querySelector('#mouse-fluid'));
   const makeCanvas = (width, height) => { const image = document.createElement('canvas'); image.width = width; image.height = height; return image; };
   let sprites = A.createSprites(makeCanvas, config.accent), fogDirty = true, lastFog = -1;
   controls.hidden = !preview;
   const rgba = alpha => `rgba(${rgb},${alpha})`;
   function schedule() {
-    if ((system?.icons.length || field.moving(config)) && !framePending) { framePending = true; requestAnimationFrame(frame); }
+    if ((system?.icons.length || field.moving(config) || fluid.active) && !framePending) { framePending = true; requestAnimationFrame(frame); }
   }
   function resize() {
     width = innerWidth; height = innerHeight;
@@ -27,6 +28,7 @@
     fogCtx.setTransform(fogScale, 0, 0, fogScale, 0, 0);
     fogCtx.imageSmoothingEnabled = true; fogCtx.imageSmoothingQuality = 'high';
     field.resize(width, height); field.waves = []; fogDirty = true;
+    fluid.resize(width, height);
     rebuild(true);
     schedule();
   }
@@ -82,7 +84,7 @@
     if (name === 'accent') sprites = A.createSprites(makeCanvas, config.accent);
     if (name === 'accent' || name === 'fogStrength') fogDirty = true;
     if (name === 'impactStrength' && !value) field.waves = [];
-    if ((name === 'mouseFog' || name === 'mouseFogStrength') && !value) field.clearPointer();
+    if ((name === 'mouseFog' || name === 'mouseFogStrength') && !value) {field.clearPointer();fluid.clear();}
     rgb = [1, 3, 5].map(start => parseInt(config.accent.slice(start, start + 2), 16)).join(',');
     document.documentElement.style.setProperty('--accent', config.accent);
     document.documentElement.style.setProperty('--grid-color', rgba(.09));
@@ -123,13 +125,17 @@
   addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') controls.hidden = !controls.hidden; });
   addEventListener('mousemove', event => {
     if (!config.mouseFog || !config.mouseFogStrength || event.target?.closest?.('#controls')) { field.leavePointer(); return; }
-    if (field.movePointer(event.clientX, event.clientY)) schedule();
+    const previousX=field.cursor?.targetX,previousY=field.cursor?.targetY;
+    if (field.movePointer(event.clientX, event.clientY)) {
+      fluid.move(event.clientX,event.clientY,event.clientX-previousX,event.clientY-previousY,config.mouseFogSize);
+      schedule();
+    }
   });
   addEventListener('mouseleave', () => field.leavePointer());
   addEventListener('blur', () => field.leavePointer());
   function frame(now) {
     framePending = false;
-    if (!system?.icons.length && !field.moving(config)) { ctx.clearRect(0, 0, width, height); return; }
+    if (!system?.icons.length && !field.moving(config) && !fluid.active) { ctx.clearRect(0, 0, width, height); return; }
     const interval = 1000 / (config.frameRate === 0 ? 30 : 60);
     if (now + .4 < nextDraw) { schedule(); return; }
     const elapsed = lastDraw === null ? 0 : now - lastDraw;
@@ -137,6 +143,7 @@
     lastDraw = now;
     nextDraw = nextDraw && now - nextDraw < interval ? nextDraw + interval : now + interval;
     field.update(dt);
+    fluid.update(dt,config);
     const previousSequence = system?.sequence;
     system?.update(dt);
     if (config.impactStrength > 0 && system?.sequence !== previousSequence && system?.current) field.impact(system.current);
@@ -145,7 +152,7 @@
       A.drawFog(fogCtx, field, sprites, config.fogStrength); fogDirty = false; lastFog = field.time;
     }
     ctx.clearRect(0, 0, width, height);
-    A.drawDetails(ctx, field, sprites, config, rgba);
+    A.drawDetails(ctx, field, sprites, config, rgba,fluid.supported);
     if (system?.icons.length) window.CircuitHud.drawScene(ctx, system, config, rgba);
     schedule();
   }

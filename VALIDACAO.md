@@ -1,4 +1,4 @@
-# Validação — Impact HUD 2.1.0-beta.3
+# Validação — Impact HUD 2.2.0-beta.1
 
 ## Testes locais
 
@@ -53,3 +53,16 @@ A instalação conferiu os quinze arquivos de execução, preservou as opções 
 - Perfil próprio do mouse testado com pico central menor e maior distribuição lateral da luminosidade. Novo tamanho padrão: 260 px; limite máximo: 500 px.
 - Prévia visual inspecionada, inclusive movimentação do cursor; sem erros/avisos observados no console. Captura: `outputs/previa-nevoa-suave.png`.
 - Os testes confirmam cache das texturas e do padrão de granulação. O custo de GPU da resolução maior não foi medido e a aparência final depende também da tela.
+
+
+## Fumaça fluida do mouse — 2.2.0-beta.1
+
+Substitui o brilho 2D descrito nas revisões anteriores por uma simulação WebGL2 inspirada no tema local Fluids. Shaders adaptados com licença MIT e crédito preservados. A alternativa 2D permanece para equipamentos incompatíveis.
+
+Os quatro testes (engine, app, atmosphere e mouse-fluid) passaram. O teste do fluido verifica fila limitada, descarte de recursos no redimensionamento, desligamento, repouso após 2,4 segundos e ausência segura de WebGL2; usa um contexto simulado e não comprova compilação dos shaders.
+
+Na prévia do Chrome, o Canvas informou renderer fluid; movimento do mouse produziu redemoinhos e filamentos visíveis. Não houve erros ou avisos no console observado. Captura: outputs/previa-mouse-fluido.png. O mapa de noventa ícones foi reutilizado. Não foi feita nova medição de CPU/GPU nem validação física do ponteiro em escalas diferentes entre monitores.
+
+A miniatura do catálogo representa ambiente e HUD, sem cursor sintético: o gerador offline não executa o fluido WebGL.
+
+Instalação desta revisão: dezessete arquivos de execução copiados e hashes conferidos. Nenhuma instância da v2 estava ativa; o tema Fluids que estava selecionado foi mantido. Para visualizar a revisão instalada, selecione Circuit Orbit no catálogo do Lively.
