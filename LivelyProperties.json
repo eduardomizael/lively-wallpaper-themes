@@ -1,0 +1,10 @@
+{
+  "accent": { "text": "Cor do laser", "type": "color", "value": "#49e5ff" },
+  "speed": { "text": "Velocidade da luz", "type": "slider", "min": 40, "max": 800, "step": 10, "value": 160 },
+  "glow": { "text": "Intensidade do brilho", "type": "slider", "min": 10, "max": 100, "step": 5, "value": 70 },
+  "trail": { "text": "Comprimento do rastro", "type": "slider", "min": 60, "max": 700, "step": 20, "value": 180 },
+  "circleSize": { "text": "Tamanho do círculo (%)", "type": "slider", "min": 40, "max": 200, "step": 5, "value": 100 },
+  "monitor": { "text": "Área: automático / estendido / monitor", "type": "dropdown", "value": 0, "items": ["Automático", "Todos — área estendida", "Monitor 1 (principal)", "Monitor 2", "Monitor 3", "Monitor 4", "Monitor 5", "Monitor 6", "Monitor 7", "Monitor 8"] },
+  "grid": { "text": "Mostrar grade sutil", "type": "checkbox", "value": true },
+  "collectIcons": { "text": "Posições dos ícones", "type": "button", "value": "Coletar posições dos ícones" }
+}

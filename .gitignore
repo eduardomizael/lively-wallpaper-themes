@@ -1,0 +1,6 @@
+settings/desktop-map.json
+settings/desktop-map.js
+settings/collection-result.js
+*.tmp
+mapper-error.log
+outputs/

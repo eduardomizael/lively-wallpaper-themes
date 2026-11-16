@@ -1,0 +1,11 @@
+{
+  "AppVersion": "2.1.0.0",
+  "Title": "Circuit Orbit",
+  "Desc": "Trilhas luminosas que visitam os ícones reais da área de trabalho. Use Coletar posições dos ícones nas opções para salvar um novo mapa, sem serviço em segundo plano.",
+  "Author": "Eduardo",
+  "License": "",
+  "Type": 1,
+  "FileName": "index.html",
+  "Arguments": "",
+  "IsAbsolutePath": false
+}

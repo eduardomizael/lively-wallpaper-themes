@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Circuit Orbit</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="scene" aria-label="Animação de trilhas luminosas ao redor dos ícones"></canvas>
+  <aside id="notice" hidden></aside>
+  <section id="controls" hidden>
+    <header><span class="eyebrow">DESKTOP REACTIVE SYSTEM</span><h1>Circuit Orbit<span> / 01</span></h1><p>Uma corrente de luz. Cada ícone, um destino.</p></header>
+    <label>Cor do laser <input id="accent" type="color" value="#49e5ff"></label>
+    <label>Velocidade da luz <input id="speed" type="range" min="40" max="800" step="10" value="160"></label>
+    <label>Brilho <input id="glow" type="range" min="10" max="100" value="70"></label>
+    <label>Rastro <input id="trail" type="range" min="60" max="700" value="180"></label>
+    <label>Tamanho do círculo (%) <input id="circleSize" type="range" min="40" max="200" step="5" value="100"></label>
+    <label>Área <select id="monitor"><option value="0">Automático</option><option value="1">Todos — área estendida</option></select></label>
+    <label>Grade sutil <input id="grid" type="checkbox" checked></label>
+    <button id="collectIcons">Coletar posições dos ícones</button>
+    <p id="collectStatus" role="status" aria-live="polite"></p>
+    <footer id="status">Aguardando mapa da área de trabalho…</footer>
+    <button id="hide">Ocultar controles · tecla P para voltar</button>
+  </section>
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
