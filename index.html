@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="with-grid">
+  <canvas id="atmosphere" aria-hidden="true"></canvas>
   <canvas id="scene" aria-label="Disparos de laser entre displays futuristas dos ícones"></canvas>
   <aside id="notice" hidden></aside>
   <section id="controls" hidden>
@@ -22,12 +23,17 @@
     <label>Quadros por segundo <select id="frameRate"><option value="0">30 FPS</option><option value="1" selected>60 FPS</option></select></label>
     <label>Área <select id="monitor"><option value="0">Automático</option><option value="1">Todos — área estendida</option></select></label>
     <label>Grade sutil <input id="grid" type="checkbox" checked></label>
+    <h2 class="control-section">Ambiente</h2>
+    <label>Névoa de energia (%) <input id="fogStrength" type="range" min="0" max="100" step="5" value="45"></label>
+    <label>Partículas de energia <input id="dustCount" type="range" min="0" max="70" step="1" value="32"></label>
+    <label>Ondas de impacto (%) <input id="impactStrength" type="range" min="0" max="100" step="5" value="40"></label>
     <button id="collectIcons">Coletar posições dos ícones</button>
     <p id="collectStatus" role="status" aria-live="polite"></p>
     <footer id="status">Aguardando mapa da área de trabalho…</footer>
     <button id="hide">Ocultar controles · tecla P para voltar</button>
   </section>
   <script src="engine.js"></script>
+  <script src="atmosphere.js"></script>
   <script src="hud.js"></script>
   <script src="app.js"></script>
 </body>

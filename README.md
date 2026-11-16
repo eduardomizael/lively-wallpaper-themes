@@ -1,6 +1,6 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.0.0-beta.3`, branch `codex/impact-hud-v2`. A versão original está preservada na tag Git `v1.0.0`.
+Versão `2.1.0-beta.1`, branch `codex/ambiente-energia`. A versão anterior está preservada na branch `codex/impact-hud-v2` e a versão original na tag Git `v1.0.0`.
 
 ## Animação
 
@@ -12,7 +12,13 @@ A aceleração dura 80 ms em qualquer distância; depois o tiro segue com veloci
 
 A permanência dos displays é uma porcentagem do número de ícones da área escolhida, de 1% a 99%, com padrão de 60%. Com dez ícones e 60%, o primeiro display permanece intacto até o sexto impacto e começa a desaparecer no sétimo. O limite é arredondado para baixo, com mínimo de um ícone: `max(1, floor(total × porcentagem / 100))`. O fade começa no impacto, não durante o voo, e dura 900 ms. Um novo impacto no mesmo ícone reacende seu display.
 
-Com um único ícone, o display recebe o tiro inicial e repete a carga local. Sem ícones no monitor, o fundo fica estático e a animação para.
+Com um único ícone, o display recebe o tiro inicial e repete a carga local. Sem ícones no monitor, a névoa e as partículas continuam animando o fundo. Se também estiverem desligadas, o laço de desenho para.
+
+## Ambiente de energia
+
+Três nuvens difusas em ciano e azul se deslocam lentamente ao fundo. Poucas partículas atravessam a tela em profundidades e velocidades diferentes. Cada impacto em um ícone produz uma onda suave que ilumina uma área maior e desaparece em 1,6 segundo. O ambiente usa a cor escolhida nos efeitos e não altera a rampa, a ordem das visitas nem os marcadores.
+
+Os efeitos são independentes: coloque a intensidade ou a quantidade em zero para desligar névoa, partículas ou ondas. Padrões: névoa 45%, 32 partículas e ondas 40%. Não há núcleo central nem filamentos adicionais.
 
 ## Configurar e abrir
 
@@ -37,12 +43,17 @@ O atalho da v2 é `circuit-orbit-v2://collect`, registrado somente no usuário a
 | Permanência | 1% a 99% do total de ícones; define quando os marcadores antigos começam o fade |
 | Quadros por segundo | Limite de 30 ou 60 FPS; movimento baseado no tempo |
 | Área | Automático, área estendida ou monitor explícito |
+| Névoa de energia | Intensidade de 0% a 100% |
+| Partículas de energia | Quantidade de 0 a 70, em camadas |
+| Ondas de impacto | Intensidade de 0% a 100% |
 
 As alterações da prévia são temporárias; o Lively persiste suas próprias opções. Para simular sem mapa real, abra `index.html?preview&demo`; a tela informa **DEMONSTRAÇÃO**.
 
 ## Instalação no Lively
 
-A v2 deve ficar em uma pasta separada, `Library/wallpapers/circuit-orbit-v2`. A instalação da versão 1 pode ser mantida. Arquivos necessários: `index.html`, `engine.js`, `hud.js`, `app.js`, `style.css`, `LivelyInfo.json`, `LivelyProperties.json`, os comandos de coleta/configuração, `tools/DesktopMap.cs`, `tools/Collect-Desktop.ps1`, `tools/Register-Collector.ps1` e o mapa salvo em `settings/`.
+A v2 deve ficar em uma pasta separada, `Library/wallpapers/circuit-orbit-v2`. A instalação da versão 1 pode ser mantida. Arquivos necessários: `index.html`, `engine.js`, `hud.js`, `atmosphere.js`, `app.js`, `style.css`, `LivelyInfo.json`, `LivelyProperties.json`, `thumbnail.jpg`, `preview.gif`, os comandos de coleta/configuração, `tools/DesktopMap.cs`, `tools/Collect-Desktop.ps1`, `tools/Register-Collector.ps1` e o mapa salvo em `settings/`.
+
+`tools/Install-Theme.ps1 -LibraryPath <biblioteca>` copia somente esses arquivos, confere as cópias, preserva o mapa e os valores das opções existentes e acrescenta os novos controles. Se a v2 estiver ativa, encerra e reabre somente suas instâncias nos mesmos monitores para atualizar também os controles em memória.
 
 O leitor usa retângulos físicos, inclusive coordenadas negativas. O tema projeta cada ícone no monitor escolhido. Em escala mista, a seleção automática precisa de conferência no Lively; existe seleção explícita. A numeração do tema começa pelo principal e pode diferir da numeração do Windows. Uma janela de prévia redimensiona o mapa, portanto não permite confirmar o alinhamento físico com os ícones do desktop.
 
@@ -50,10 +61,11 @@ O leitor usa retângulos físicos, inclusive coordenadas negativas. O tema proje
 
 - `engine.js`: simulação independente do Canvas, sorteio, aceleração, fases e vida dos displays.
 - `hud.js`: desenho dos arcos, carga, feixe e impacto.
+- `atmosphere.js`: névoa, partículas ambientais e ondas de impacto.
 - `app.js`: propriedades do Lively, projeção dos monitores, coleta manual e agendamento de quadros.
-- Fundo e grade são CSS estático. Não há reconstrução da grade ou gradiente de tela inteira em cada quadro do Canvas.
+- Fundo base e grade são CSS estático. A névoa reutiliza três texturas de 256×256 em uma camada limitada a 960×540 pixels, atualizada no máximo 20 vezes por segundo. Não há reconstrução de gradientes de tela inteira em cada quadro.
 - Não há histórico crescente de trilhas: somente os displays recentes, partículas curtas e um tiro ativo são mantidos.
-- O limite de FPS não altera a velocidade da simulação. Monitores sem ícones não mantêm um laço de desenho.
+- O limite de FPS não altera a velocidade da simulação. Há no máximo 70 partículas ambientais e seis ondas simultâneas; as ondas expiram. Um monitor sem ícones e sem ambiente ativo não mantém um laço de desenho.
 
 Essas alterações reduzem trabalho desnecessário identificado na v1. O ganho real de CPU/GPU ainda precisa ser medido. `ANALISE_DE_DESEMPENHO.md` é o relatório histórico da v1, não uma medição desta versão.
 
@@ -66,6 +78,7 @@ Para regenerar: execute `node tools/Build-Thumbnail.cjs`, depois `python tools/R
 ```
 node tests/engine.test.cjs
 node tests/app.test.cjs
+node tests/atmosphere.test.cjs
 ```
 
 Os testes cobrem impacto antes de acender o HUD, carga, aceleração, destinos sem autorrepetição, desvanecimento, limites de objetos, monitores vazios/únicos, coordenadas negativas, limites de FPS e coleta pontual. A validação no navegador e os limites da validação física estão em `VALIDACAO.md`.

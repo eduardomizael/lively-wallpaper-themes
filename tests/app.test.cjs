@@ -11,7 +11,7 @@ function element(key) {
 const page = {
   CircuitEngine: E, URLSearchParams, console, Date, Math,
   innerWidth: 1000, innerHeight: 800, devicePixelRatio: 1, screen: { width: 1000, height: 800 }, location: { search: '?preview', href: '' },
-  document: { querySelector: element, getElementById: id => element('#' + id), createElement: () => ({ remove() {} }), head: { appendChild() {} }, documentElement: { style: { setProperty() {} } }, body: { classList: { toggle() {} } } },
+  document: { querySelector: element, getElementById: id => element('#' + id), createElement: tag => tag === 'canvas' ? { getContext: () => ctx } : { remove() {} }, head: { appendChild() {} }, documentElement: { style: { setProperty() {} } }, body: { classList: { toggle() {} } } },
   addEventListener() {}, requestAnimationFrame: callback => { frame = callback; },
   setInterval: callback => { interval = callback; return 1; }, setTimeout: callback => { deadline = callback; return 2; }, clearInterval: () => { interval = null; }, clearTimeout: () => { deadline = null; },
   Option: function(text, value) { this.text = text; this.value = value; this.dataset = {}; }
@@ -19,10 +19,11 @@ const page = {
 page.window = page;
 const context = vm.createContext(page);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../hud.js'), 'utf8'), context);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../atmosphere.js'), 'utf8'), context);
 const realDraw = page.CircuitHud.drawScene;
 page.CircuitHud.drawScene = (...args) => { draws++; simulationTime = args[1].time; realDraw(...args); };
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8'), context);
-assert.equal(frame, undefined, 'No idle animation before a saved map loads');
+assert.equal(typeof frame, 'function', 'Atmosphere can animate without icons');
 assert.equal(interval, undefined, 'No background collector or file polling');
 const snapshot = { monitors: [{ x: 0, y: 0, width: 1000, height: 800 }], icons: [{ id: 0, x: 50, y: 50, width: 48, height: 48 }, { id: 1, x: 800, y: 650, width: 48, height: 48 }] };
 page.receiveDesktopMap(snapshot); assert.equal(arcs.length, 0);
@@ -37,7 +38,10 @@ page.livelyPropertyListener('speed', 9999); assert.equal(element('#speed').value
 page.livelyPropertyListener('persistencePercent', 0); assert.equal(element('#persistencePercent').value, 1);
 page.livelyPropertyListener('persistencePercent', 100); assert.equal(element('#persistencePercent').value, 99);
 page.receiveDesktopMap({ ...snapshot, icons: [] }); draws = 0; frame(clock);
-assert.equal(draws, 0, 'An empty monitor stops redrawing');
+assert.equal(draws, 0, 'An empty monitor draws only the atmosphere, not HUDs');
+page.livelyPropertyListener('fogStrength', 0); page.livelyPropertyListener('dustCount', 0); page.livelyPropertyListener('impactStrength', 0);
+frame(clock + 100);
+assert.equal(draws, 0, 'An empty monitor with atmosphere disabled stops redrawing');
 element('#collectIcons').onclick(); assert.equal(page.location.href, 'circuit-orbit-v2://collect'); assert.ok(interval); assert.ok(deadline);
 page.receiveCollectionResult({ completedAt: new Date(Date.now() + 1000).toISOString(), ok: true, map: snapshot });
 assert.equal(interval, null); assert.equal(deadline, null); assert.match(element('#collectStatus').textContent, /Mapa salvo/);

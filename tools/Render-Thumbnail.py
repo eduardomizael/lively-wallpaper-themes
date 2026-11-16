@@ -77,6 +77,13 @@ def path_points(path):
 
 
 def paint(image, command):
+    if command['op'] == 'image':
+        x,y,w,h = command['rect']
+        layer = ASSETS[command['image']].resize((max(1,round(w*S)),max(1,round(h*S))),Image.Resampling.BILINEAR)
+        if command.get('alpha',1) != 1:
+            layer.putalpha(layer.getchannel('A').point(lambda a: round(a*command['alpha'])))
+        image.paste(layer,(round(x*S),round(y*S)),layer)
+        return
     style = command['style']
     d = ImageDraw.Draw(image,'RGBA')
     if command['op'] == 'rect':
@@ -86,7 +93,7 @@ def paint(image, command):
         else:
             _,_,r0,cx,cy,r1 = style['args']
             left,top = max(0,int(x*S)),max(0,int(y*S))
-            right,bottom = min(W*S,math.ceil((x+w)*S)),min(H*S,math.ceil((y+h)*S))
+            right,bottom = min(image.width,math.ceil((x+w)*S)),min(image.height,math.ceil((y+h)*S))
             if right <= left or bottom <= top: return
             layer = Image.new('RGBA',(right-left,bottom-top))
             pixels = layer.load()
@@ -94,7 +101,8 @@ def paint(image, command):
                 for xx in range(right-left):
                     t = (math.hypot((xx+left)/S-cx,(yy+top)/S-cy)-r0)/(r1-r0 or 1)
                     pixels[xx,yy] = interpolate(style['stops'],t)
-            image.paste(layer,(left,top),layer)
+            if image.mode == 'RGBA': image.alpha_composite(layer,(left,top))
+            else: image.paste(layer,(left,top),layer)
         return
     groups = path_points(command['path'])
     if command['op'] == 'fill':
@@ -123,6 +131,11 @@ def paint(image, command):
                 d.line(((x0+(x1-x0)*a)*S,(y0+(y1-y0)*a)*S,(x0+(x1-x0)*b)*S,(y0+(y1-y0)*b)*S),fill=interpolate(style['stops'],(a+b)/2),width=width)
 
 
+ASSETS = []
+for asset in DATA.get('assets',[]):
+    image = Image.new('RGBA',(asset['width']*S,asset['height']*S))
+    for command in asset['commands']: paint(image,command)
+    ASSETS.append(image)
 base = background()
 frames = []
 for i,commands in enumerate(DATA['frames']):

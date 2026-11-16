@@ -1,8 +1,8 @@
-# Validação — Impact HUD 2.0.0-beta.3
+# Validação — Impact HUD 2.1.0-beta.1
 
 ## Testes locais
 
-`node tests/engine.test.cjs` e `node tests/app.test.cjs` passaram.
+`node tests/engine.test.cjs`, `node tests/app.test.cjs` e `node tests/atmosphere.test.cjs` passaram.
 
 - HUD inexistente antes do primeiro impacto e ativado somente na chegada.
 - Tiro em linha reta, com rampa fixa de 80 ms seguida de velocidade constante. Na velocidade 160, percursos de 300 e 2.400 px avançam os mesmos 76,8 px nos primeiros 100 ms.
@@ -14,7 +14,8 @@
 - Casos sem ícones e com apenas um ícone.
 - Projeção com monitor em coordenadas negativas.
 - Agendamento de 30/60 FPS sob uma fonte simulada de 165 Hz, mantendo o tempo de movimento.
-- Monitor vazio sem redesenho contínuo e sem consulta periódica ao mapa.
+- Monitor vazio continua exibindo o ambiente quando habilitado; sem ambiente ativo, para de redesenhar. Não há consulta periódica ao mapa.
+- Cache de três texturas mantido após mil desenhos da névoa, quantidade configurável de partículas, limite de seis ondas e descarte após 1,6 segundo.
 - Coleta manual com espera limitada e encerramento da espera em sucesso ou cancelamento.
 
 ## Navegador e equipamento
@@ -29,4 +30,10 @@ O relatório `ANALISE_DE_DESEMPENHO.md` refere-se à v1. Não há comparação q
 
 ## Miniatura do catálogo
 
-`thumbnail.jpg` (640×360) e `preview.gif` (640×360, 120 quadros a 20 FPS, seis segundos, loop contínuo) gerados com os comandos do motor/HUD reais e ícones genéricos. Quadros inspecionados visualmente e todos os quadros do GIF decodificados para conferir integridade. Um pequeno dissolve suaviza a volta do loop. Os campos `Thumbnail` e `Preview` seguem a configuração dos outros temas locais. Não houve mudança no fundo ou na animação de execução do wallpaper.
+`thumbnail.jpg` (640×360) e `preview.gif` (640×360, 120 quadros a 20 FPS, seis segundos, loop contínuo) gerados com os comandos do motor/HUD e do ambiente, com ícones genéricos. A miniatura desta versão inclui névoa, partículas e ondas. Um pequeno dissolve suaviza a volta do loop. Os campos `Thumbnail` e `Preview` seguem a configuração dos outros temas locais.
+
+## Conferência do novo ambiente
+
+Prévia no Chrome com o mapa real de 90 ícones: névoa e onda de impacto visíveis, com controles separados para os três efeitos. Controles desligados e restaurados aos padrões; sem erros/avisos no console observado. O custo real de CPU/GPU da nova camada ainda não foi medido.
+
+A instalação conferiu os quinze arquivos de execução, preservou as opções existentes e recarregou uma instância ativa da v2 no Lively. O mapa salvo foi preservado e os novos controles foram acrescentados ao arquivo de propriedades. A miniatura de seis segundos foi regenerada e todos os seus 120 quadros foram decodificados para conferir integridade. O servidor temporário de prévia foi encerrado.

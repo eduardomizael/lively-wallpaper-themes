@@ -9,5 +9,8 @@
   "frameRate": { "text": "Quadros por segundo", "type": "dropdown", "value": 1, "items": ["30 FPS", "60 FPS"] },
   "monitor": { "text": "Área: automático / estendido / monitor", "type": "dropdown", "value": 0, "items": ["Automático", "Todos — área estendida", "Monitor 1 (principal)", "Monitor 2", "Monitor 3", "Monitor 4", "Monitor 5", "Monitor 6", "Monitor 7", "Monitor 8"] },
   "grid": { "text": "Mostrar grade sutil", "type": "checkbox", "value": true },
+  "fogStrength": { "text": "Névoa de energia (%)", "type": "slider", "min": 0, "max": 100, "step": 5, "value": 45 },
+  "dustCount": { "text": "Partículas de energia", "type": "slider", "min": 0, "max": 70, "step": 1, "value": 32 },
+  "impactStrength": { "text": "Ondas de impacto (%)", "type": "slider", "min": 0, "max": 100, "step": 5, "value": 40 },
   "collectIcons": { "text": "Posições dos ícones", "type": "button", "value": "Coletar posições dos ícones" }
 }

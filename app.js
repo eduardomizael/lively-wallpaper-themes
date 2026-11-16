@@ -1,24 +1,33 @@
 (() => {
   'use strict';
-  const E = window.CircuitEngine, canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d');
+  const E = window.CircuitEngine, canvas = document.querySelector('#scene'), ctx = canvas.getContext('2d');
+  const A = window.CircuitAtmosphere, fogCanvas = document.querySelector('#atmosphere'), fogCtx = fogCanvas.getContext('2d');
   const controls = document.querySelector('#controls'), notice = document.querySelector('#notice');
   const params = new URLSearchParams(location.search), preview = params.has('preview'), demo = params.has('demo');
-  const config = { accent: '#49e5ff', speed: 160, glow: 70, trail: 180, circleSize: 100, chargeTime: 1000, persistencePercent: 60, frameRate: 1, monitor: 0, grid: true };
-  const ranges = { speed: [40, 800], glow: [10, 100], trail: [60, 700], circleSize: [40, 200], chargeTime: [300, 2400], persistencePercent: [1, 99], frameRate: [0, 1], monitor: [0, 9] };
+  const config = { accent: '#49e5ff', speed: 160, glow: 70, trail: 180, circleSize: 100, chargeTime: 1000, persistencePercent: 60, frameRate: 1, monitor: 0, grid: true, fogStrength: 45, dustCount: 32, impactStrength: 40 };
+  const ranges = { speed: [40, 800], glow: [10, 100], trail: [60, 700], circleSize: [40, 200], chargeTime: [300, 2400], persistencePercent: [1, 99], frameRate: [0, 1], monitor: [0, 9], fogStrength: [0, 100], dustCount: [0, 70], impactStrength: [0, 100] };
   let rgb = '73,229,255', map = null, system = null, width = 0, height = 0, signature = '', chosen = '';
   let framePending = false, lastDraw = null, nextDraw = 0, collecting = false;
   let collectionTimer = null, collectionDeadline = null, collectionStarted = 0;
+  const field = new A.Atmosphere(1, 1);
+  const makeCanvas = (width, height) => { const image = document.createElement('canvas'); image.width = width; image.height = height; return image; };
+  let sprites = A.createSprites(makeCanvas, config.accent), fogDirty = true, lastFog = -1;
   controls.hidden = !preview;
   const rgba = alpha => `rgba(${rgb},${alpha})`;
   function schedule() {
-    if (system?.icons.length && !framePending) { framePending = true; requestAnimationFrame(frame); }
+    if ((system?.icons.length || field.moving(config)) && !framePending) { framePending = true; requestAnimationFrame(frame); }
   }
   function resize() {
     width = innerWidth; height = innerHeight;
     const dpr = Math.min(devicePixelRatio || 1, 2);
     canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const fogScale = Math.min(1, 960 / width, 540 / height);
+    fogCanvas.width = Math.max(1, Math.round(width * fogScale)); fogCanvas.height = Math.max(1, Math.round(height * fogScale));
+    fogCtx.setTransform(fogScale, 0, 0, fogScale, 0, 0);
+    field.resize(width, height); field.waves = []; fogDirty = true;
     rebuild(true);
+    schedule();
   }
   function chooseBounds() {
     const monitors = map.monitors, all = E.virtualBounds(monitors), dpr = devicePixelRatio || 1;
@@ -37,6 +46,7 @@
     if (!force && nextSignature === signature) return;
     signature = nextSignature;
     system = new E.PulseSystem(icons, { width, height, ...config });
+    field.waves = [];
     ctx.clearRect(0, 0, width, height); lastDraw = null; nextDraw = 0;
     updateStatus(); schedule();
   }
@@ -68,6 +78,9 @@
     else if (name === 'grid') value = value === true || value === 'true';
     else { value = Number(value); if (!Number.isFinite(value)) return; value = E.clamp(value, ...ranges[name]); }
     config[name] = value;
+    if (name === 'accent') sprites = A.createSprites(makeCanvas, config.accent);
+    if (name === 'accent' || name === 'fogStrength') fogDirty = true;
+    if (name === 'impactStrength' && !value) field.waves = [];
     rgb = [1, 3, 5].map(start => parseInt(config.accent.slice(start, start + 2), 16)).join(',');
     document.documentElement.style.setProperty('--accent', config.accent);
     document.documentElement.style.setProperty('--grid-color', rgba(.09));
@@ -77,6 +90,8 @@
     if (name === 'monitor' || name === 'circleSize') rebuild(true);
     else system?.setOptions(config);
     updateStatus(); schedule();
+    if (!config.fogStrength) { fogCtx.clearRect(0, 0, width, height); fogDirty = false; }
+    if (!system?.icons.length && !field.moving(config)) ctx.clearRect(0, 0, width, height);
   }
   window.livelyPropertyListener = apply;
   function finishCollection(message) {
@@ -106,15 +121,24 @@
   addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') controls.hidden = !controls.hidden; });
   function frame(now) {
     framePending = false;
-    if (!system?.icons.length) { ctx.clearRect(0, 0, width, height); return; }
+    if (!system?.icons.length && !field.moving(config)) { ctx.clearRect(0, 0, width, height); return; }
     const interval = 1000 / (config.frameRate === 0 ? 30 : 60);
     if (now + .4 < nextDraw) { schedule(); return; }
     const elapsed = lastDraw === null ? 0 : now - lastDraw;
     const dt = Math.min(elapsed / 1000, .05);
     lastDraw = now;
     nextDraw = nextDraw && now - nextDraw < interval ? nextDraw + interval : now + interval;
-    system.update(dt); ctx.clearRect(0, 0, width, height);
-    window.CircuitHud.drawScene(ctx, system, config, rgba);
+    field.update(dt);
+    const previousSequence = system?.sequence;
+    system?.update(dt);
+    if (config.impactStrength > 0 && system?.sequence !== previousSequence && system?.current) field.impact(system.current);
+    if (fogDirty || (config.fogStrength > 0 && field.time - lastFog >= .05)) {
+      fogCtx.clearRect(0, 0, width, height);
+      A.drawFog(fogCtx, field, sprites, config.fogStrength); fogDirty = false; lastFog = field.time;
+    }
+    ctx.clearRect(0, 0, width, height);
+    A.drawDetails(ctx, field, sprites, config, rgba);
+    if (system?.icons.length) window.CircuitHud.drawScene(ctx, system, config, rgba);
     schedule();
   }
   if (demo) {
