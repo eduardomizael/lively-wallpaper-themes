@@ -18,9 +18,20 @@
     if (fresh.length) candidates = fresh;
     return candidates[Math.min(candidates.length - 1, Math.floor(clamp(random(), 0, .999999) * candidates.length))] || null;
   }
-  const flightDuration = (length, speed) => clamp(length / (clamp(speed, 40, 800) * 8), .16, 4);
+  const RAMP_TIME = .08;
+  function flightDuration(length, speed) {
+    const velocity = clamp(speed, 40, 800) * 8;
+    length = Math.max(0, length);
+    const rampDistance = velocity * RAMP_TIME / 2;
+    return length <= rampDistance ? Math.sqrt(2 * length * RAMP_TIME / velocity) : length / velocity + RAMP_TIME / 2;
+  }
+  function travelDistance(elapsed, speed) {
+    const velocity = clamp(speed, 40, 800) * 8, t = Math.max(0, elapsed);
+    return t <= RAMP_TIME ? velocity * t * t / (2 * RAMP_TIME) : velocity * (t - RAMP_TIME / 2);
+  }
   function shotPosition(shot) {
-    const progress = clamp(shot.elapsed / shot.duration, 0, 1) ** 2.6;
+    const length = distance(shot.from, shot.to);
+    const progress = length ? clamp(travelDistance(shot.elapsed, shot.speed ?? 160) / length, 0, 1) : 1;
     return { x: shot.from.x + (shot.to.x - shot.from.x) * progress, y: shot.from.y + (shot.to.y - shot.from.y) * progress, progress };
   }
   const retentionCount = (count, percent) => Math.max(1, Math.floor(count * clamp(percent, 1, 99) / 100));
@@ -53,18 +64,19 @@
       return target;
     }
     setOptions(options) {
-      const fraction = this.shot ? this.shot.elapsed / this.shot.duration : 0;
+      const travelled = this.shot ? Math.min(distance(this.shot.from, this.shot.to), travelDistance(this.shot.elapsed, this.shot.speed)) : 0;
       Object.assign(this.options, options);
       if (this.shot) {
         this.shot.duration = flightDuration(distance(this.shot.from, this.shot.to), this.options.speed);
-        this.shot.elapsed = fraction * this.shot.duration;
+        this.shot.speed = this.options.speed;
+        this.shot.elapsed = flightDuration(travelled, this.options.speed);
       }
     }
     launch(source, target, fromStation = true) {
       const length = distance(source, target), dx = (target.x - source.x) / (length || 1), dy = (target.y - source.y) / (length || 1);
       const offset = fromStation ? Math.min(source.radius + 6, length * .3) : 0;
       const from = { x: source.x + dx * offset, y: source.y + dy * offset };
-      this.shot = { from, to: target, elapsed: 0, duration: flightDuration(distance(from, target), this.options.speed) };
+      this.shot = { from, to: target, elapsed: 0, speed: this.options.speed, duration: flightDuration(distance(from, target), this.options.speed) };
       this.phase = 'flight';
       const station = this.stations.get(source.id);
       if (station) station.emission = .2;
@@ -108,7 +120,7 @@
       return station.fadeStartedAt === null ? 1 : stationOpacity(this.time - station.fadeStartedAt);
     }
   }
-  const api = { TAU, clamp, distance, virtualBounds, project, pickTarget, flightDuration, shotPosition, retentionCount, stationOpacity, PulseSystem };
+  const api = { TAU, RAMP_TIME, clamp, distance, virtualBounds, project, pickTarget, flightDuration, travelDistance, shotPosition, retentionCount, stationOpacity, PulseSystem };
   if (typeof module !== 'undefined') module.exports = api;
   root.CircuitEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -9,11 +9,25 @@ assert.equal(E.pickTarget(icons, 0, 1, () => 0).id, 2);
 assert.equal(E.pickTarget(icons, 0, 1, () => .99).id, 3);
 assert.equal(E.pickTarget(icons.slice(0, 2), 0, 1, () => 0).id, 1);
 assert.equal(E.pickTarget(icons.slice(0, 1), 0, null), null);
-const shot = { from: { x: 0, y: 0 }, to: { x: 100, y: 50 }, duration: 1, elapsed: 0 };
-const early = E.shotPosition({ ...shot, elapsed: .25 }), middle = E.shotPosition({ ...shot, elapsed: .5 }), late = E.shotPosition({ ...shot, elapsed: .75 });
+const shot = { from: { x: 0, y: 0 }, to: { x: 100, y: 50 }, speed: 160, elapsed: 0 };
+shot.duration = E.flightDuration(E.distance(shot.from, shot.to), shot.speed);
+const early = E.shotPosition({ ...shot, elapsed: .02 }), middle = E.shotPosition({ ...shot, elapsed: .04 }), late = E.shotPosition({ ...shot, elapsed: .06 });
 assert.ok(late.x - middle.x > middle.x - early.x, 'Projectile accelerates toward the target');
 assert.equal(early.y, early.x / 2, 'Flight is straight');
-assert.deepEqual(E.shotPosition({ ...shot, elapsed: 1 }), { x: 100, y: 50, progress: 1 });
+assert.deepEqual(E.shotPosition({ ...shot, elapsed: shot.duration }), { x: 100, y: 50, progress: 1 });
+for (const speed of [40, 160, 800]) {
+  for (const length of [0, 1, 10, 40, 300, 2400, 10000]) {
+    const duration = E.flightDuration(length, speed);
+    assert.ok(Number.isFinite(duration));
+    assert.ok(Math.abs(E.travelDistance(duration, speed) - length) < 1e-8, 'Impact time matches physical travelled distance, including short flights');
+  }
+}
+const near = { from: { x: 0, y: 0 }, to: { x: 300, y: 0 }, speed: 160, elapsed: .1 };
+const far = { ...near, to: { x: 2400, y: 0 } };
+assert.equal(E.shotPosition(near).x, E.shotPosition(far).x, 'Equal distance travelled during launch regardless of target range');
+assert.ok(Math.abs(E.shotPosition(near).x - 76.8) < 1e-8);
+assert.ok(Math.abs(E.travelDistance(.15, 160) - E.travelDistance(.1, 160) - 64) < 1e-8, 'Cruise speed is constant after 80 ms');
+assert.ok(Math.abs(E.travelDistance(.08 - 1e-8, 160) - E.travelDistance(.08 + 1e-8, 160)) < .001, 'No positional jump at ramp transition');
 assert.equal(E.retentionCount(10, 60), 6);
 assert.equal(E.retentionCount(10, 99), 9);
 assert.equal(E.retentionCount(10, 1), 1);

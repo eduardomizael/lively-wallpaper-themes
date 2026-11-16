@@ -1,11 +1,12 @@
-# Validação — Impact HUD 2.0.0-beta.2
+# Validação — Impact HUD 2.0.0-beta.3
 
 ## Testes locais
 
 `node tests/engine.test.cjs` e `node tests/app.test.cjs` passaram.
 
 - HUD inexistente antes do primeiro impacto e ativado somente na chegada.
-- Tiro em linha reta, com avanço crescente pela curva de aceleração.
+- Tiro em linha reta, com rampa fixa de 80 ms seguida de velocidade constante. Na velocidade 160, percursos de 300 e 2.400 px avançam os mesmos 76,8 px nos primeiros 100 ms.
+- Chegada testada em distâncias de 0 a 10.000 px e velocidades de 40 a 800, incluindo impactos antes do final da rampa e continuidade da posição na transição.
 - Destinos retirados de uma lista de disponíveis; três rodadas consecutivas de dez ícones verificadas sem repetição interna ou autorrepetição na passagem entre rodadas.
 - Carga completa antes do disparo, sem salto de posição ao alterar a velocidade durante o voo.
 - Permanência percentual de 1% a 99%, com testes dos extremos. Para dez ícones e 60%, o primeiro display permanece intacto até o sexto impacto e começa o fade no sétimo, sem antecipar durante o voo.

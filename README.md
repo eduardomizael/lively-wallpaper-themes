@@ -1,12 +1,14 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.0.0-beta.2`, branch `codex/impact-hud-v2`. A versão original está preservada na tag Git `v1.0.0`.
+Versão `2.0.0-beta.3`, branch `codex/impact-hud-v2`. A versão original está preservada na tag Git `v1.0.0`.
 
 ## Animação
 
 Um primeiro tiro entra pela borda da tela e atinge um ícone. Somente no impacto surgem os arcos, segmentos e marcadores do display. Os anéis giram em sentidos diferentes, o indicador interno carrega e o brilho se concentra antes do disparo seguinte.
 
 O destino é sorteado de uma lista de ícones disponíveis e retirado dela. Todos são visitados uma vez antes de a lista ser preenchida novamente. Na passagem entre rodadas, o próximo destino não pode ser o próprio emissor. O tiro percorre uma reta com aceleração progressiva e termina em um clarão local com partículas curtas. Não há circuito permanente, números sobre os ícones ou displays previamente acesos.
+
+A aceleração dura 80 ms em qualquer distância; depois o tiro segue com velocidade constante, sem frear antes do impacto. Em percursos muito curtos, chega durante a própria rampa. A distância percorrida nos primeiros instantes é igual para destinos próximos ou distantes, até atingir o destino. Alterar a velocidade em voo preserva a posição atual.
 
 A permanência dos displays é uma porcentagem do número de ícones da área escolhida, de 1% a 99%, com padrão de 60%. Com dez ícones e 60%, o primeiro display permanece intacto até o sexto impacto e começa a desaparecer no sétimo. O limite é arredondado para baixo, com mínimo de um ícone: `max(1, floor(total × porcentagem / 100))`. O fade começa no impacto, não durante o voo, e dura 900 ms. Um novo impacto no mesmo ícone reacende seu display.
 
