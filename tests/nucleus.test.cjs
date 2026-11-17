@@ -8,7 +8,9 @@ const sprites = root.CircuitNucleus.createSprites((w,h)=>({getContext:()=>({
 })}), '#49e5ff');
 assert.equal(sprites.length,24);
 const center=(96*192+96)*4+3;
-assert.ok(images.every(image=>image[center]<=20),'Every frame leaves the icon center at least 92% transparent');
+assert.ok(images.every(image=>image[center]>=150 && image[center]<=165),'Every frame has a defined translucent energy core');
+const rim=(96*192+190)*4+3;
+assert.ok(images.every(image=>image[rim]===0),'Energy dissipates before the sprite edge');
 assert.notDeepEqual(images[0],images[12],'The density deforms over time');
 let draws=0, arcs=0, invalid=false;
 const ctx=new Proxy({globalAlpha:1,drawImage(...args){draws++; invalid ||= args.slice(1).some(v=>!Number.isFinite(v));},arc(){arcs++;},createRadialGradient(){return {addColorStop(){}};}},{get:(t,k)=>t[k]||(()=>{})});
@@ -26,4 +28,4 @@ assert.equal(draws,count);assert.ok(arcs>0,'The original HUD remains selectable'
 const station=system.stations.get(0);station.fadeStartedAt=0;system.current=null;system.time=2;
 config.markerStyle=1;root.CircuitHud.drawScene(ctx,system,config,()=>'',sprites);
 assert.equal(draws,count,'Expired stations draw no mist');
-console.log('Nucleo: centro transparente, deformacao, impacto, alternancia e fade: OK');
+console.log('Orb: nucleo luminoso translucido, borda dissipada, deformacao, impacto, alternancia e fade: OK');

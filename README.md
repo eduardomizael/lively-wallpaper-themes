@@ -1,14 +1,14 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.3.0-beta.1`, na branch `codex/marcador-nucleo-nevoa`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+Versão `2.3.0-beta.2`, na branch `codex/marcador-nucleo-nevoa`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
 
 ## Marcador alternativo: núcleo de névoa
 
 O controle **Marcador** alterna entre **Display futurista** e **Núcleo de névoa**, selecionado por padrão nesta revisão. A troca preserva os ícones já atingidos, a carga atual e a ordem dos tiros. Nenhum marcador aparece antes do impacto.
 
-O núcleo usa fumaça procedural irregular, com filamentos, pulsação e uma pluma ascendente. Seu centro é mais transparente para manter o ícone legível. Na carga, contrai e intensifica o brilho; o impacto e o disparo produzem um pulso. A cor, o brilho, o tamanho e a permanência existentes também controlam esse estilo. A permanência percentual e o fade de 900 ms são os mesmos do display.
+O núcleo é um orb translúcido luminoso, inspirado na referência visual de Ori fornecida pelo usuário. O centro fica mais claro, quase branco, e produz línguas de energia que se curvam e se dissipam para fora em direções irregulares. O movimento parte do centro; não há furo central ou borda circular rígida. A transparência limita a sobreposição sobre o ícone. Na carga, contrai e intensifica o brilho; o impacto e o disparo expandem a coroa de energia. A cor, o brilho, o tamanho e a permanência existentes também controlam esse estilo. A permanência percentual e o fade de 900 ms são os mesmos do display. Os desenhos são procedurais, sem copiar imagens do jogo para o tema.
 
-`nucleus.js` gera uma sequência cíclica compartilhada de 24 texturas de 192×192, com interpolação entre quadros. Cada estação tem uma fase diferente; não existe uma simulação WebGL por ícone nem acúmulo de partículas. A sequência é criada ao abrir e recriada ao trocar a cor. O custo real no Lively ainda não foi medido. A névoa do mouse continua usando sua camada WebGL independente.
+`nucleus.js` gera uma sequência cíclica compartilhada de 24 texturas de 192×192, com interpolação entre quadros. A fase radial avança para fora e o ruído deforma os filamentos; o ciclo não tem salto de orientação no fechamento. Cada estação tem uma fase diferente; não existe uma simulação WebGL por ícone nem acúmulo de partículas. São duas imagens por estação/quadro. A sequência é criada ao abrir e recriada ao trocar a cor. O custo real no Lively ainda não foi medido. A névoa do mouse continua usando sua camada WebGL independente.
 
 ## Animação
 

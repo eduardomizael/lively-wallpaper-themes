@@ -1,4 +1,4 @@
-# Validação — Circuit Orbit 2.3.0-beta.1
+# Validação — Circuit Orbit 2.3.0-beta.2
 
 ## Testes locais
 
@@ -75,3 +75,13 @@ Instalação desta revisão: dezessete arquivos de execução copiados e hashes 
 - A nova miniatura usa o mesmo atlas e renderizador dos marcadores. Não há simulação de refração do desktop: o efeito de calor é visual, por pulsação, deformação e pluma ascendente.
 - A medição de CPU/GPU e a conferência de legibilidade sobre os ícones físicos no desktop ainda não foram realizadas nesta revisão.
 - Instalação: dezoito arquivos conferidos por hash e uma instância ativa da v2 recarregada no mesmo monitor. O mapa e as preferências existentes foram preservados; o seletor de marcador foi acrescentado. O GIF regenerado foi decodificado integralmente sem erro.
+
+## Orb com núcleo emissor — 2.3.0-beta.2
+
+Reformulação a partir das imagens de Ori fornecidas pelo usuário: núcleo central preenchido e translúcido, cor clareando para branco no centro, filamentos radiais irregulares e propagação para fora. O centro vazado e a pluma única da beta.1 foram removidos. A coroa contrai na carga e expande no impacto/disparo. Não usa imagens ou recursos do jogo.
+
+Os testes nucleus e app passaram após a alteração. O teste do atlas verifica a presença do núcleo em todos os quadros e transparência nas extremidades, além da deformação, ativação por impacto, alternância e fade. A grade de ruído é calculada uma vez e reutilizada na geração do atlas. O desenho usa duas imagens por estação, sem histórico crescente. Os testes anteriores de engine, atmosphere e mouse-fluid não foram repetidos: esses módulos não mudaram.
+
+A prévia do Chrome foi inspecionada com o mapa real salvo e não apresentou erros ou avisos no console observado. Miniatura regenerada com o mesmo renderizador. A legibilidade sobre os ícones físicos e o consumo desta revisão ainda dependem de avaliação no desktop.
+
+Captura desta revisão: `outputs/previa-orb-energia.png`. GIF decodificado integralmente sem erros. Instalação conferiu os dezoito arquivos por hash e recarregou uma instância ativa da v2, preservando mapa e preferências.
