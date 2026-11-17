@@ -1,4 +1,4 @@
-# Validação — Circuit Orbit 2.3.0-beta.2
+# Validação — Circuit Orbit 2.4.0-beta.1
 
 ## Testes locais
 
@@ -85,3 +85,13 @@ Os testes nucleus e app passaram após a alteração. O teste do atlas verifica 
 A prévia do Chrome foi inspecionada com o mapa real salvo e não apresentou erros ou avisos no console observado. Miniatura regenerada com o mesmo renderizador. A legibilidade sobre os ícones físicos e o consumo desta revisão ainda dependem de avaliação no desktop.
 
 Captura desta revisão: `outputs/previa-orb-energia.png`. GIF decodificado integralmente sem erros. Instalação conferiu os dezoito arquivos por hash e recarregou uma instância ativa da v2, preservando mapa e preferências.
+
+## Tiro de energia fluida — 2.4.0-beta.1
+
+Novo seletor independente do marcador: Laser / Energia fluida. O tiro alternativo usa uma instância própria do simulador já usado pelo mouse; funciona com a névoa do cursor desligada. A explosão injeta um núcleo e oito impulsos radiais. Rastro influencia a largura e a duração residual. Trocar para Laser, mudar o mapa ou redimensionar limpa o efeito anterior.
+
+Testes app, mouse-fluid e shot-fluid passaram. Cobrem interpolação do trajeto na velocidade 800, explosão no impacto, ausência de contexto extra no estilo Laser, independência dos controles do mouse, fila de no máximo 48 entradas, repouso após a duração configurada e alternativa 2D de no máximo 96 amostras expirantes. Testes com contexto simulado não validam shaders.
+
+Chrome executou a camada com renderer fluid. Rastro e turbulência do impacto foram observados com o mapa salvo, sem erros/avisos no console. Controles de estilo e velocidade exercitados, incluindo 800; efeito do mouse desligado durante parte da conferência. Não foi feita medição de CPU/GPU desta camada adicional. A miniatura existente representa a opção Laser e o orb, pois o gerador offline não executa WebGL.
+
+Instalação conferiu dezenove arquivos por hash, preservou mapa/opções e recarregou uma instância no monitor 3440×1440. O Lively registrou abertura bem-sucedida. Captura da prévia: `outputs/previa-tiro-fluido.png`.

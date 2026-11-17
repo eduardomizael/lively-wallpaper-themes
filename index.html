@@ -10,6 +10,7 @@
 <body class="with-grid">
   <canvas id="atmosphere" aria-hidden="true"></canvas>
   <canvas id="mouse-fluid" aria-hidden="true"></canvas>
+  <canvas id="shot-fluid" aria-hidden="true"></canvas>
   <canvas id="scene" aria-label="Disparos de laser entre displays futuristas dos ícones"></canvas>
   <aside id="notice" hidden></aside>
   <section id="controls" hidden>
@@ -18,6 +19,7 @@
     <label>Velocidade do tiro <input id="speed" type="range" min="40" max="800" step="10" value="160"></label>
     <label>Brilho <input id="glow" type="range" min="10" max="100" value="70"></label>
     <label>Rastro do tiro <input id="trail" type="range" min="60" max="700" value="180"></label>
+    <label>Efeito do tiro <select id="shotStyle"><option value="0">Laser</option><option value="1" selected>Energia fluida</option></select></label>
     <label>Marcador <select id="markerStyle"><option value="0">Display futurista</option><option value="1" selected>Núcleo de névoa</option></select></label>
     <label>Tamanho do marcador (%) <input id="circleSize" type="range" min="40" max="200" step="5" value="100"></label>
     <label>Tempo de carga (ms) <input id="chargeTime" type="range" min="300" max="2400" step="100" value="1000"></label>
@@ -40,6 +42,7 @@
   <script src="engine.js"></script>
   <script src="atmosphere.js"></script>
   <script src="mouse-fluid.js"></script>
+  <script src="shot-fluid.js"></script>
   <script src="nucleus.js"></script>
   <script src="hud.js"></script>
   <script src="app.js"></script>

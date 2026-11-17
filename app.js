@@ -11,15 +11,18 @@
   let collectionTimer = null, collectionDeadline = null, collectionStarted = 0;
   const field = new A.Atmosphere(1, 1);
   const fluid = new window.CircuitMouseFluid.MouseFluid(document.querySelector('#mouse-fluid'));
+  const shotFluid = new window.CircuitShotFluid.ShotFluid(document.querySelector('#shot-fluid'));
   const makeCanvas = (width, height) => { const image = document.createElement('canvas'); image.width = width; image.height = height; return image; };
   let sprites = A.createSprites(makeCanvas, config.accent), fogDirty = true, lastFog = -1;
   controls.hidden = !preview;
   let nucleusSprites = window.CircuitNucleus.createSprites(makeCanvas, config.accent);
   config.markerStyle = 1;
   ranges.markerStyle = [0, 1];
+  config.shotStyle = 1;
+  ranges.shotStyle = [0, 1];
   const rgba = alpha => `rgba(${rgb},${alpha})`;
   function schedule() {
-    if ((system?.icons.length || field.moving(config) || fluid.active) && !framePending) { framePending = true; requestAnimationFrame(frame); }
+    if ((system?.icons.length || field.moving(config) || fluid.active || shotFluid.active) && !framePending) { framePending = true; requestAnimationFrame(frame); }
   }
   function resize() {
     width = innerWidth; height = innerHeight;
@@ -32,6 +35,7 @@
     fogCtx.imageSmoothingEnabled = true; fogCtx.imageSmoothingQuality = 'high';
     field.resize(width, height); field.waves = []; fogDirty = true;
     fluid.resize(width, height);
+    shotFluid.resize(width, height);
     rebuild(true);
     schedule();
   }
@@ -52,6 +56,7 @@
     if (!force && nextSignature === signature) return;
     signature = nextSignature;
     system = new E.PulseSystem(icons, { width, height, ...config });
+    shotFluid.clear();
     field.waves = [];
     ctx.clearRect(0, 0, width, height); lastDraw = null; nextDraw = 0;
     updateStatus(); schedule();
@@ -84,6 +89,7 @@
     else if (name === 'grid' || name === 'mouseFog') value = value === true || value === 'true';
     else { value = Number(value); if (!Number.isFinite(value)) return; value = E.clamp(value, ...ranges[name]); }
     config[name] = value;
+    if (name === 'shotStyle') shotFluid.clear();
     if (name === 'accent') { sprites = A.createSprites(makeCanvas, config.accent); nucleusSprites = window.CircuitNucleus.createSprites(makeCanvas, config.accent); }
     if (name === 'accent' || name === 'fogStrength') fogDirty = true;
     if (name === 'impactStrength' && !value) field.waves = [];
@@ -138,7 +144,7 @@
   addEventListener('blur', () => field.leavePointer());
   function frame(now) {
     framePending = false;
-    if (!system?.icons.length && !field.moving(config) && !fluid.active) { ctx.clearRect(0, 0, width, height); return; }
+    if (!system?.icons.length && !field.moving(config) && !fluid.active && !shotFluid.active) { ctx.clearRect(0, 0, width, height); return; }
     const interval = 1000 / (config.frameRate === 0 ? 30 : 60);
     if (now + .4 < nextDraw) { schedule(); return; }
     const elapsed = lastDraw === null ? 0 : now - lastDraw;
@@ -148,7 +154,9 @@
     field.update(dt);
     fluid.update(dt,config);
     const previousSequence = system?.sequence;
+    const shotBefore = shotFluid.capture(system);
     system?.update(dt);
+    if (system) shotFluid.update(dt,system,shotBefore,config);
     if (config.impactStrength > 0 && system?.sequence !== previousSequence && system?.current) field.impact(system.current);
     if (fogDirty || (config.fogStrength > 0 && field.time - lastFog >= .05)) {
       fogCtx.clearRect(0, 0, width, height);
@@ -156,6 +164,7 @@
     }
     ctx.clearRect(0, 0, width, height);
     A.drawDetails(ctx, field, sprites, config, rgba,fluid.supported);
+    shotFluid.drawFallback(ctx,nucleusSprites,config);
     if (system?.icons.length) window.CircuitHud.drawScene(ctx, system, config, rgba, nucleusSprites);
     schedule();
   }

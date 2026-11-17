@@ -1,5 +1,5 @@
 /*
- * Mouse-only fluid layer. Fluid solver shaders adapted from WebGL-Fluid-Simulation.
+ * Fluid layer shared by mouse and projectile renderers. Shaders adapted from WebGL-Fluid-Simulation.
  * Copyright (c) 2017 Pavel Dobryakov. MIT license: licenses/Fluids-MIT.txt.
  * No audio input, random splats, background, bloom, network or independent animation loop.
  */
@@ -127,6 +127,11 @@
       this.pending.push({x:x/this.width,y:1-y/this.height,dx:dx/this.width*6000,dy:-dy/this.height*6000,size:Math.max(60,Math.min(500,size))});
       if(this.pending.length>12)this.pending.shift();this.quiet=0;this.active=true;return true;
     }
+    inject(x,y,dx,dy,size,density=.75,twist=10) {
+      if(!this.supported || ![x,y,dx,dy,size,density,twist].every(Number.isFinite) || x<0 || y<0 || x>this.width || y>this.height) return false;
+      this.pending.push({x:x/this.width,y:1-y/this.height,dx:dx/this.width*6000,dy:-dy/this.height*6000,size:Math.max(30,Math.min(500,size)),density:Math.max(0,Math.min(3,density)),twist});
+      if(this.pending.length>48)this.pending.shift();this.quiet=0;this.active=true;return true;
+    }
     pass(name,target,textures={},values={}) {
       const gl=this.gl,program=this.programs[name];gl.useProgram(program.handle);
       gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
@@ -145,14 +150,15 @@
       if(!config.mouseFog || !config.mouseFogStrength){if(this.active)this.clear();return;}
       if(!this.active) return;
       this.quiet+=Math.max(0,dt);
-      if(this.quiet>=2.4){this.clear();return;}
+      const lifetime=this.lifetime||2.4;
+      if(this.quiet>=lifetime){this.clear();return;}
       this.accumulator+=Math.max(0,dt);if(this.accumulator<1/30)return;
       const step=Math.min(this.accumulator,.0334);this.accumulator=0;
       const v=this.velocity,p=this.pressure,d=this.dye;
       for(const input of this.pending.splice(0)) {
         const radius=(input.size*.17/this.height)**2,aspect=this.width/this.height;
-        this.pass('splat',v.write,{a:v.read},{point:[input.x,input.y],impulse:[input.dx,input.dy,0],radius,aspect,twist:10*Math.sin(input.x*97+input.y*67)});v.swap();
-        this.pass('splat',d.write,{a:d.read},{point:[input.x,input.y],impulse:[.75,0,0],radius,aspect,twist:0});d.swap();
+        this.pass('splat',v.write,{a:v.read},{point:[input.x,input.y],impulse:[input.dx,input.dy,0],radius,aspect,twist:input.twist??10*Math.sin(input.x*97+input.y*67)});v.swap();
+        this.pass('splat',d.write,{a:d.read},{point:[input.x,input.y],impulse:[input.density??.75,0,0],radius,aspect,twist:0});d.swap();
       }
       this.pass('curl',this.curl,{a:v.read});
       this.pass('vorticity',v.write,{a:v.read,b:this.curl},{dt:step});v.swap();
@@ -164,7 +170,7 @@
       this.pass('advect',v.write,{a:v.read,b:v.read},{velocitySize,sourceSize:velocitySize,dt:step,dissipation:.65});v.swap();
       this.pass('advect',d.write,{a:v.read,b:d.read},{velocitySize,sourceSize:[d.read.width,d.read.height],dt:step,dissipation:2.4});d.swap();
       const tint=[1,3,5].map(i=>parseInt(config.accent.slice(i,i+2),16)/255);
-      this.pass('display',null,{a:d.read},{tint,strength:config.mouseFogStrength/100,fade:Math.min(1,(2.4-this.quiet)/.65)});
+      this.pass('display',null,{a:d.read},{tint,strength:config.mouseFogStrength/100,fade:Math.min(1,(lifetime-this.quiet)/Math.min(.65,lifetime))});
     }
     dispose() {
       const gl=this.gl;

@@ -4,6 +4,7 @@
   "glow": { "text": "Intensidade do brilho", "type": "slider", "min": 10, "max": 100, "step": 5, "value": 70 },
   "trail": { "text": "Rastro do tiro", "type": "slider", "min": 60, "max": 700, "step": 20, "value": 180 },
   "markerStyle": { "text": "Marcador", "type": "dropdown", "value": 1, "items": ["Display futurista", "Núcleo de névoa"] },
+  "shotStyle": { "text": "Efeito do tiro", "type": "dropdown", "value": 1, "items": ["Laser", "Energia fluida"] },
   "circleSize": { "text": "Tamanho do marcador (%)", "type": "slider", "min": 40, "max": 200, "step": 5, "value": 100 },
   "chargeTime": { "text": "Tempo de carga (ms)", "type": "slider", "min": 300, "max": 2400, "step": 100, "value": 1000 },
   "persistencePercent": { "text": "Permanência dos marcadores (% dos ícones)", "type": "slider", "min": 1, "max": 99, "step": 1, "value": 60 },

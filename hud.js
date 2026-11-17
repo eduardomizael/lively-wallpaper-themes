@@ -61,14 +61,19 @@
       const dx = shot.to.x - shot.from.x, dy = shot.to.y - shot.from.y, length = Math.hypot(dx, dy);
       const tailLength = Math.min(config.trail, length * head.progress);
       const tx = head.x - dx / (length || 1) * tailLength, ty = head.y - dy / (length || 1) * tailLength;
-      if (tailLength > .01) {
+      if (tailLength > .01 && config.shotStyle !== 1) {
         const beam = ctx.createLinearGradient(tx, ty, head.x, head.y);
         beam.addColorStop(0, rgba(0)); beam.addColorStop(.65, rgba(.35 * intensity)); beam.addColorStop(1, rgba(intensity));
         ctx.strokeStyle = beam; ctx.lineWidth = 1.6;
         ctx.shadowColor = config.accent; ctx.shadowBlur = 9 * intensity;
         ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(head.x, head.y); ctx.stroke(); ctx.shadowBlur = 0;
       }
-      ctx.fillStyle = rgba(.9 * intensity);
+      if(config.shotStyle===1){
+        const glow=ctx.createRadialGradient(head.x,head.y,0,head.x,head.y,12);
+        glow.addColorStop(0,rgba(.65*intensity));glow.addColorStop(.3,rgba(.3*intensity));glow.addColorStop(1,rgba(0));
+        ctx.fillStyle=glow;ctx.fillRect(head.x-12,head.y-12,24,24);
+      }
+      ctx.fillStyle = config.shotStyle===1?`rgba(220,250,255,${.9*intensity})`:rgba(.9 * intensity);
       ctx.beginPath(); ctx.arc(head.x, head.y, 2, 0, TAU); ctx.fill();
     }
     for (const p of system.particles) {

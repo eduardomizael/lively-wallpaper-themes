@@ -1,6 +1,14 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.3.0-beta.2`, na branch `codex/marcador-nucleo-nevoa`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+Versão `2.4.0-beta.1`, na branch `codex/marcador-nucleo-nevoa`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+
+## Tiro alternativo: energia fluida
+
+**Efeito do tiro** permite escolher **Laser** ou **Energia fluida**, selecionado por padrão nesta revisão. O segundo usa o mesmo simulador WebGL do mouse, em uma camada independente: o projétil deixa névoa turbulenta e, ao atingir um ícone, injeta uma explosão central com oito impulsos para fora. Funciona com qualquer marcador e com o efeito do mouse desligado. A trajetória e a aceleração são preservadas; a troca de estilo mantém o voo atual.
+
+**Brilho** controla a intensidade; **Rastro do tiro** controla a largura e a duração residual da energia (aproximadamente 0,72 a 2,55 segundos após a última emissão, conforme o valor). Ao selecionar Laser, os resíduos são limpos. O mapa e o tamanho do monitor também limpam resíduos antigos. Em equipamentos sem WebGL2/float, há uma alternativa 2D com até 96 amostras temporárias.
+
+`shot-fluid.js` amostra o trajeto em até 24 pontos por quadro para reduzir falhas em tiros rápidos. A fila de injeções tem limite de 48 e o fluido atualiza a até 30 Hz pelo agendador existente; não há serviço ou laço independente. A segunda camada WebGL é criada somente ao usar Energia fluida. Quando mouse e tiros estão ativos juntos, existem duas simulações; o custo real de CPU/GPU ainda não foi medido. A miniatura de catálogo existente continua representando o orb com o estilo Laser disponível.
 
 ## Marcador alternativo: núcleo de névoa
 

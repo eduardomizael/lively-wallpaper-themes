@@ -25,3 +25,4 @@ button:disabled { opacity: .5; cursor: wait; }
 #collectStatus:empty { display: none; }
 #controls { max-height: calc(100vh - 68px); overflow-y: auto; }
 #notice { position: fixed; bottom: 36px; left: 36px; max-width: 440px; padding: 14px 18px; border-left: 2px solid var(--accent); background: #09131de8; color: #92b1c0; font-size: 12px; line-height: 1.6; }
+#shot-fluid { position:absolute; inset:0; pointer-events:none; }

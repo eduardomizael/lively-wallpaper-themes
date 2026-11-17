@@ -23,6 +23,10 @@ fluid.move(300,200,3,1,260);fluid.update(.04,{...config,mouseFog:false});assert.
 fluid.resize(1920,1080);assert.ok(deleted>=16,'Resize frees the old textures/framebuffers');assert.equal(fluid.targets.length,8);
 assert.equal(fluid.move(-1,200,2,2,260),false);
 assert.equal(fluid.move(20,20,0,0,260),false);
+for(let i=0;i<100;i++)fluid.inject(500,500,0,0,120,2,20);
+assert.equal(fluid.pending.length,48,'Projectile splats are bounded even at impact');
+assert.equal(fluid.inject(NaN,200,1,1,100),false);
+fluid.lifetime=.8;fluid.update(.04,config);fluid.update(.9,config);assert.equal(fluid.active,false,'Projectile residue honors its configured lifetime');
 fluid.dispose();assert.equal(fluid.targets.length,0);
 const fallback=new context.window.CircuitMouseFluid.MouseFluid({getContext:()=>null});assert.equal(fallback.supported,false);fallback.resize(100,100);fallback.update(1,config);
 console.log('Fluido: fila limitada, recursos liberados, repouso e compatibilidade: OK');
