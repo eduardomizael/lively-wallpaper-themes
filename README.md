@@ -1,6 +1,6 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.2.0-beta.1`, branch `codex/ambiente-energia`. A versão anterior está preservada na branch `codex/impact-hud-v2` e a versão original na tag Git `v1.0.0`.
+Versão 2.2.0-beta.1 consolidada na main. As versões anteriores estão preservadas nas tags Git, desde v1.0.0. Branches de desenvolvimento são removidas após incorporação à main; cada nova alteração recebe sua própria branch.
 
 ## Animação
 
