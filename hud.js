@@ -19,8 +19,9 @@
       const rotation = system.time * .58 + station.spin;
       const hit = Math.max(0, 1 - (system.time - station.hitTime) / .42);
       const flare = Math.max(hit, station.emission / .2);
-      if (config.markerStyle >= 2 && oriOrbs?.drawStation(ctx,station,system.time,charge,flare,opacity,intensity)) continue;
-      if (config.markerStyle >= 1 && nucleusSprites) {
+      const style = root.CircuitEngine.stationMarkerStyle(station,config.markerStyle);
+      if (style >= 2 && oriOrbs?.drawStation(ctx,station,system.time,charge,flare,opacity,intensity,style)) continue;
+      if (style >= 1 && nucleusSprites) {
         root.CircuitNucleus.drawStation(ctx, nucleusSprites, station, system.time, charge, flare, opacity, intensity);
         continue;
       }

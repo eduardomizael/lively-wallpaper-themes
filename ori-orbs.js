@@ -1,4 +1,4 @@
-/* V7 orb renderer: one shared 256px WebGL tile, driven by the wallpaper scheduler. */
+/* V7 orb renderer: up to five 256px tiles sharing one WebGL context and scheduler. */
 (function(root){
   'use strict';
   const PALETTES = [
@@ -44,9 +44,9 @@
     },
   ];
 
-  function createTile(makeCanvas) {
-    const canvas=makeCanvas(256,256), image=makeCanvas(256,256), imageCtx=image.getContext('2d');
-    const gl=canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:false,depth:false,stencil:false,antialias:false});
+  function createTile(makeCanvas, shared=null) {
+    const canvas=shared?.canvas||makeCanvas(256,256), image=makeCanvas(256,256), imageCtx=image.getContext('2d');
+    const gl=shared?.gl||canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:false,depth:false,stencil:false,antialias:false});
     if(!gl||!gl.getExtension('EXT_color_buffer_float')) throw new Error('WebGL2 float unavailable');
     const linearSupported=Boolean(gl.getExtension('OES_texture_float_linear'));
     const ARCHETYPES=PALETTES.map(a=>({...a}));
@@ -63,7 +63,7 @@
     return shader;
   }
 
-  const vs = compile(gl.VERTEX_SHADER, S.VERT);
+  const vs = shared?.vs||compile(gl.VERTEX_SHADER, S.VERT);
   function buildProgram(fragBody) {
     const fs = compile(gl.FRAGMENT_SHADER, S.PRELUDE + fragBody);
     const prog = gl.createProgram();
@@ -77,7 +77,7 @@
     return { handle: prog, uniforms: {} };
   }
 
-  const programs = {
+  const programs = shared?.programs||{
     splat: buildProgram(S.EMITTER_SPLAT),
     curl: buildProgram(S.CURL_FRAG),
     vorticity: buildProgram(S.VORTICITY_FRAG),
@@ -89,7 +89,7 @@
     display: buildProgram(S.DISPLAY_FRAG),
   };
 
-  const quadBuffer = gl.createBuffer();
+  const quadBuffer = shared?.quadBuffer||gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
 
@@ -475,7 +475,7 @@
     imageCtx.clearRect(0,0,256,256);imageCtx.drawImage(canvas,0,0);
   }
   resize();
-  return {image, step,
+  return {image, step, shared:{canvas,gl,vs,programs,quadBuffer},
     select(type,original,accent){
       config.preset=type;
       ARCHETYPES[type]={...PALETTES[type]};
@@ -483,35 +483,42 @@
         Object.assign(ARCHETYPES[type],{core:rgb.map(c=>c*1.8+.5),mid:rgb.map(c=>c*1.6),smoke:rgb.map(c=>c*.5),dye:rgb.map(c=>c*1.1)});}
       clearFluidTargets();
     },
-    dispose(){for(const t of fboTargets){gl.deleteTexture(t.texture);gl.deleteFramebuffer(t.fbo);}for(const p of Object.values(programs))gl.deleteProgram(p.handle);gl.deleteBuffer(quadBuffer);gl.deleteShader(vs);gl.getExtension('WEBGL_lose_context')?.loseContext?.();}
+    dispose(){for(const t of fboTargets){gl.deleteTexture(t.texture);gl.deleteFramebuffer(t.fbo);}}
   };
   }
   class Orbs {
-    constructor(makeCanvas){this.makeCanvas=makeCanvas;this.tile=null;this.failed=false;this.key='';this.time=0;this.accumulator=0;this.stats={frames:0,totalMs:0,maxMs:0};}
+    constructor(makeCanvas){this.makeCanvas=makeCanvas;this.tiles=new Map();this.shared=null;this.failed=false;this.time=0;this.readyTypes=new Set();this.stats={frames:0,totalMs:0,maxMs:0};}
     update(dt,system,config){
       this.ready=false;
+      this.readyTypes.clear();this.currentStyle=config.markerStyle;
       if(config.markerStyle<2||!system?.stations.size)return;
       if(this.failed)return;
       try {
-        if(!this.tile)this.tile=createTile(this.makeCanvas);
-        const type=Math.max(0,Math.min(4,config.markerStyle-2));
-        const key=JSON.stringify([type,config.orbOriginalColors,config.accent]);
-        if(key!==this.key){this.tile.select(type,config.orbOriginalColors,config.accent);this.key=key;this.accumulator=1/30;}
-        this.accumulator+=Math.max(0,dt);this.time+=Math.max(0,dt);
-        if(this.accumulator>=1/30){const started=performance.now();this.tile.step(Math.min(this.accumulator,.05),this.time);this.accumulator=0;
-          const ms=performance.now()-started;this.stats.frames++;this.stats.totalMs+=ms;this.stats.maxMs=Math.max(this.stats.maxMs,ms);}
-        this.ready=true;
-      } catch(error){this.reason=String(error.message||error);this.failed=true;this.tile?.dispose();this.tile=null;}
+        const requested=config.markerStyle===7?new Set([...system.stations.values()].map(s=>root.CircuitEngine.stationMarkerStyle(s,7)).filter(s=>s>=2)):new Set([config.markerStyle]);
+        for(const [style,entry] of this.tiles)if(!requested.has(style)){entry.tile.dispose();this.tiles.delete(style);}
+        this.time+=Math.max(0,dt);
+        for(const style of requested){
+          let entry=this.tiles.get(style);
+          if(!entry){const tile=createTile(this.makeCanvas,this.shared);this.shared=tile.shared;entry={tile,key:'',accumulator:0};this.tiles.set(style,entry);}
+          const type=style-2,key=JSON.stringify([type,config.orbOriginalColors,config.accent]);
+          if(key!==entry.key){entry.tile.select(type,config.orbOriginalColors,config.accent);entry.key=key;entry.accumulator=1/30;}
+          entry.accumulator+=Math.max(0,dt);
+          if(entry.accumulator>=1/30){const started=performance.now();entry.tile.step(Math.min(entry.accumulator,.05),this.time);entry.accumulator=0;
+            const ms=performance.now()-started;this.stats.frames++;this.stats.totalMs+=ms;this.stats.maxMs=Math.max(this.stats.maxMs,ms);}
+          this.readyTypes.add(style);
+        }
+        this.ready=this.readyTypes.size>0;
+      } catch(error){this.reason=String(error.message||error);this.failed=true;this.dispose();}
     }
-    drawStation(ctx,station,time,charge,flare,opacity,intensity){
-      if(!this.ready||opacity<=0)return false;
+    drawStation(ctx,station,time,charge,flare,opacity,intensity,style=this.currentStyle){
+      if(!this.readyTypes.has(style)||opacity<=0)return false;
       const {x,y,radius}=station.icon, pulse=Math.sin(time*2.3+station.spin)*.025;
       const extent=radius*3.26*(1+pulse-charge**4*.12+flare*.15);
       ctx.globalAlpha=Math.min(1,opacity*intensity*(.8+charge**4*.4+flare*.3));
       ctx.save();ctx.translate(x,y);ctx.rotate(station.spin);
-      ctx.drawImage(this.tile.image,-extent,-extent,extent*2,extent*2);ctx.restore();ctx.globalAlpha=1;return true;
+      ctx.drawImage(this.tiles.get(style).tile.image,-extent,-extent,extent*2,extent*2);ctx.restore();ctx.globalAlpha=1;return true;
     }
-    dispose(){this.tile?.dispose();this.tile=null;this.ready=false;this.key='';}
+    dispose(){for(const e of this.tiles.values())e.tile.dispose();this.tiles.clear();if(this.shared){const {gl,programs,quadBuffer,vs}=this.shared;for(const p of Object.values(programs))gl.deleteProgram(p.handle);gl.deleteBuffer(quadBuffer);gl.deleteShader(vs);gl.getExtension('WEBGL_lose_context')?.loseContext?.();}this.shared=null;this.ready=false;this.readyTypes.clear();}
   }
   root.CircuitOriOrbs={Orbs};
 })(window);

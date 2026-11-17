@@ -1,4 +1,4 @@
-# Validação — Circuit Orbit 2.5.0-beta.1
+# Validação — Circuit Orbit 2.5.0-beta.2
 
 ## Testes locais
 
@@ -115,3 +115,11 @@ Na prévia do Chrome com noventa posições salvas, o renderizador informou v7; 
 Os cinco tipos foram inspecionados visualmente, assim como a cor personalizada e o retorno ao HUD original. Capturas: `outputs/orbe-v7-vortice.png`, `orbe-v7-combustao.png`, `orbe-v7-eter.png`, `orbe-v7-plasma.png` e `orbe-v7-estrela.png`. A prévia não desenha os ícones reais do Windows e não comprova a legibilidade sobre cada ícone físico. O servidor temporário da conferência foi encerrado.
 
 Instalação: vinte e um arquivos conferidos por hash e uma instância ativa recarregada no monitor 3440×1440. Mapa e preferências preservados; as cinco opções e a escolha de paleta foram acrescentadas ao esquema de propriedades.
+
+## Todos os marcadores aleatórios — 2.5.0-beta.2
+
+Novo item 7 do seletor mistura os sete estilos, com escolha estável baseada na amostra aleatória de orientação que já existe em cada estação. Não modifica o sorteio dos destinos. Os tipos v7 agora mantêm campos separados, compartilhando contexto WebGL e programas dos shaders. Limite: cinco campos, independente do número de ícones; campos sem estações são liberados.
+
+Testes engine, ori-orbs, app e nucleus passaram. A extensão do teste ori-orbs verifica os sete resultados de seleção, cinco imagens diferentes simultâneas, apenas um contexto adicional e retorno a um único campo ao selecionar um estilo fixo. Não há nova medição quantitativa de CPU/GPU para o modo misto.
+
+Prévia do Chrome inspecionada com estilos distintos simultâneos (HUD, Vórtice e Combustão), sem erros ou avisos no console observado. Captura: `outputs/previa-marcadores-aleatorios.png`. Os cinco campos simultâneos foram verificados pelo teste com contexto simulado; não houve medição de consumo no desktop para essa combinação.

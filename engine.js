@@ -1,6 +1,8 @@
 (function (root) {
   'use strict';
   const TAU = Math.PI * 2;
+  // spin is sampled once on first impact and retained until the station expires.
+  const stationMarkerStyle = (station, selection) => selection === 7 ? Math.min(6, Math.max(0, Math.floor(station.spin / TAU * 7))) : selection;
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
   function virtualBounds(monitors) {
@@ -120,7 +122,7 @@
       return station.fadeStartedAt === null ? 1 : stationOpacity(this.time - station.fadeStartedAt);
     }
   }
-  const api = { TAU, RAMP_TIME, clamp, distance, virtualBounds, project, pickTarget, flightDuration, travelDistance, shotPosition, retentionCount, stationOpacity, PulseSystem };
+  const api = { TAU, RAMP_TIME, clamp, distance, virtualBounds, project, pickTarget, flightDuration, travelDistance, shotPosition, retentionCount, stationOpacity, stationMarkerStyle, PulseSystem };
   if (typeof module !== 'undefined') module.exports = api;
   root.CircuitEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

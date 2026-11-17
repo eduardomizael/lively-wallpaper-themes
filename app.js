@@ -18,7 +18,7 @@
   let nucleusSprites = window.CircuitNucleus.createSprites(makeCanvas, config.accent);
   const oriOrbs = new window.CircuitOriOrbs.Orbs(makeCanvas);
   config.markerStyle = 1;
-  ranges.markerStyle = [0, 6];
+  ranges.markerStyle = [0, 7];
   config.orbOriginalColors = true;
   config.shotStyle = 1;
   ranges.shotStyle = [0, 1];

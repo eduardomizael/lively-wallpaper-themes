@@ -1,6 +1,12 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.5.0-beta.1`, na branch `codex/marcadores-orbes-v7`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+Versão `2.5.0-beta.2`, na branch `codex/marcadores-orbes-v7`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+
+## Todos os marcadores aleatórios
+
+**Aleatório — todos os marcadores** mistura os sete estilos. Cada estação usa um dos sete com a mesma probabilidade, determinado pela amostra aleatória de orientação já criada no primeiro impacto. O estilo fica estável durante toda a vida do marcador, inclusive ao ser atingido novamente antes de desaparecer. Depois de expirar, o próximo impacto pode escolher outro. O sorteio não consome novos números do gerador que escolhe os destinos e não altera o percurso dos tiros.
+
+O modo misto compartilha um único contexto WebGL e os programas dos shaders. Mantém até cinco simulações de 256×256, uma por arquétipo v7 presente; todas as estações do mesmo tipo reutilizam sua imagem. Tipos que deixam a tela liberam os buffers. Voltar a um estilo fixo mantém apenas a simulação necessária. Por animar vários tipos ao mesmo tempo, o modo misto pode custar mais GPU que selecionar um único marcador; o consumo real ainda não foi medido. As cores, o brilho e a permanência existentes continuam valendo.
 
 ## Cinco marcadores dos estudos v7
 
