@@ -20,6 +20,7 @@
   ranges.markerStyle = [0, 1];
   config.shotStyle = 1;
   ranges.shotStyle = [0, 1];
+  config.clickBurst = true;
   const rgba = alpha => `rgba(${rgb},${alpha})`;
   function schedule() {
     if ((system?.icons.length || field.moving(config) || fluid.active || shotFluid.active) && !framePending) { framePending = true; requestAnimationFrame(frame); }
@@ -86,7 +87,7 @@
     if (name === 'collectIcons') { collectIcons(); return; }
     if (!(name in config)) return;
     if (name === 'accent') { if (!/^#[\da-f]{6}$/i.test(value)) return; }
-    else if (name === 'grid' || name === 'mouseFog') value = value === true || value === 'true';
+    else if (name === 'grid' || name === 'mouseFog' || name === 'clickBurst') value = value === true || value === 'true';
     else { value = Number(value); if (!Number.isFinite(value)) return; value = E.clamp(value, ...ranges[name]); }
     config[name] = value;
     if (name === 'shotStyle') shotFluid.clear();
@@ -141,6 +142,10 @@
     }
   });
   addEventListener('mouseleave', () => field.leavePointer());
+  addEventListener('mousedown', event => {
+    if (!config.clickBurst || event.button !== 0 || event.target?.closest?.('#controls')) return;
+    if (shotFluid.burst(event.clientX,event.clientY)) schedule();
+  });
   addEventListener('blur', () => field.leavePointer());
   function frame(now) {
     framePending = false;
@@ -156,7 +161,7 @@
     const previousSequence = system?.sequence;
     const shotBefore = shotFluid.capture(system);
     system?.update(dt);
-    if (system) shotFluid.update(dt,system,shotBefore,config);
+    shotFluid.update(dt,system,shotBefore,config);
     if (config.impactStrength > 0 && system?.sequence !== previousSequence && system?.current) field.impact(system.current);
     if (fogDirty || (config.fogStrength > 0 && field.time - lastFog >= .05)) {
       fogCtx.clearRect(0, 0, width, height);

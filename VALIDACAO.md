@@ -1,4 +1,4 @@
-# Validação — Circuit Orbit 2.4.0-beta.1
+# Validação — Circuit Orbit 2.4.0-beta.2
 
 ## Testes locais
 
@@ -95,3 +95,9 @@ Testes app, mouse-fluid e shot-fluid passaram. Cobrem interpolação do trajeto 
 Chrome executou a camada com renderer fluid. Rastro e turbulência do impacto foram observados com o mapa salvo, sem erros/avisos no console. Controles de estilo e velocidade exercitados, incluindo 800; efeito do mouse desligado durante parte da conferência. Não foi feita medição de CPU/GPU desta camada adicional. A miniatura existente representa a opção Laser e o orb, pois o gerador offline não executa WebGL.
 
 Instalação conferiu dezenove arquivos por hash, preservou mapa/opções e recarregou uma instância no monitor 3440×1440. O Lively registrou abertura bem-sucedida. Captura da prévia: `outputs/previa-tiro-fluido.png`.
+
+## Explosão ao clicar — 2.4.0-beta.2
+
+Testes app e shot-fluid passaram. Cobrem clique esquerdo, controle de desligamento, exclusão dos controles da prévia e do botão direito, coordenadas inválidas sem alocação, explosão sem ícones/névoa do mouse/tiro fluido e retorno ao repouso após a duração configurada.
+
+Na prévia do Chrome, cliques produziram nuvens de energia nas coordenadas escolhidas com Laser selecionado e névoa do mouse desligada; renderer fluid, sem erros ou avisos observados. Captura: `outputs/previa-explosao-clique.png`. A resposta a cliques encaminhados pelo desktop do Windows não foi conferida fisicamente nesta revisão. Nenhuma simulação adicional foi criada: o efeito reutiliza a camada dos tiros. O custo real de CPU/GPU não foi medido.

@@ -60,4 +60,12 @@ element('#collectIcons').onclick(); assert.equal(page.location.href, 'circuit-or
 page.receiveCollectionResult({ completedAt: new Date(Date.now() + 1000).toISOString(), ok: true, map: snapshot });
 assert.equal(interval, null); assert.equal(deadline, null); assert.match(element('#collectStatus').textContent, /Mapa salvo/);
 element('#collectIcons').onclick(); deadline(); assert.equal(interval, null); assert.equal(element('#collectIcons').disabled, false);
+let clicks=0;
+const burst=page.CircuitShotFluid.ShotFluid.prototype.burst;
+page.CircuitShotFluid.ShotFluid.prototype.burst=function(...args){clicks++;return burst.apply(this,args);};
+events.mousedown({button:0,clientX:400,clientY:300});assert.equal(clicks,1);
+events.mousedown({button:2,clientX:400,clientY:300});assert.equal(clicks,1);
+events.mousedown({button:0,clientX:400,clientY:300,target:{closest:()=>true}});assert.equal(clicks,1,'Preview controls do not cause explosions');
+page.livelyPropertyListener('clickBurst',false);
+events.mousedown({button:0,clientX:400,clientY:300});assert.equal(clicks,1,'Click explosion can be disabled separately');
 console.log('HUD, limite de FPS, monitor vazio e coleta unica: OK');

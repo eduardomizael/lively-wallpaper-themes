@@ -1,6 +1,12 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.4.0-beta.1`, na branch `codex/marcador-nucleo-nevoa`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+Versão `2.4.0-beta.2`, na branch `codex/marcador-nucleo-nevoa`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+
+## Explosão de energia ao clicar
+
+Cada clique esquerdo no wallpaper injeta um pulso central e oito impulsos para fora, criando uma explosão de névoa turbulenta no cursor. **Explosão de energia ao clicar** ativa ou desliga essa reação, habilitada por padrão. Usa a cor dos efeitos e a intensidade de **Brilho**. Funciona também com o efeito do mouse desligado, o tiro Laser selecionado ou nenhum ícone no monitor.
+
+O efeito compartilha a camada de energia dos tiros; não cria outro contexto WebGL nem um laço permanente. Sem novas emissões, a energia se dissipa em cerca de 1,6 segundo. Cliques repetidos usam as filas limitadas existentes. Cliques nos controles da prévia e botões diferentes do esquerdo são ignorados. O listener não bloqueia a seleção ou abertura de ícones; depende dos eventos de mouse encaminhados pelo Lively.
 
 ## Tiro alternativo: energia fluida
 
