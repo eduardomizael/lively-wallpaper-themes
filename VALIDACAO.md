@@ -1,4 +1,4 @@
-# Validação — Circuit Orbit 2.4.0-beta.2
+# Validação — Circuit Orbit 2.5.0-beta.1
 
 ## Testes locais
 
@@ -101,3 +101,17 @@ Instalação conferiu dezenove arquivos por hash, preservou mapa/opções e reca
 Testes app e shot-fluid passaram. Cobrem clique esquerdo, controle de desligamento, exclusão dos controles da prévia e do botão direito, coordenadas inválidas sem alocação, explosão sem ícones/névoa do mouse/tiro fluido e retorno ao repouso após a duração configurada.
 
 Na prévia do Chrome, cliques produziram nuvens de energia nas coordenadas escolhidas com Laser selecionado e névoa do mouse desligada; renderer fluid, sem erros ou avisos observados. Captura: `outputs/previa-explosao-clique.png`. A resposta a cliques encaminhados pelo desktop do Windows não foi conferida fisicamente nesta revisão. Nenhuma simulação adicional foi criada: o efeito reutiliza a camada dos tiros. O custo real de CPU/GPU não foi medido.
+
+## Cinco orbes dos estudos v7 — 2.5.0-beta.1
+
+Integração dos cinco arquétipos presentes no estudo local `ori-energy-spheres`: Vórtice Solar, Combustão Radial, Pulso de Éter, Tempestade de Plasma e Estrela Solar. O shader de composição estava identificado como v7, embora painel e README do estudo ainda descrevessem versões anteriores. A pasta de estudo não foi alterada.
+
+São reutilizados os shaders, as paletas HDR e os oito emissores de cada arquétipo. As adaptações removem o fundo opaco, suavizam a borda da imagem e limitam a simulação a uma textura compartilhada de 256×256/grade física 128×128. O conteúdo interno é compartilhado entre todos os marcadores do estilo selecionado; cada cópia tem orientação, carga, pulso e opacidade próprios. Não há uma simulação por ícone.
+
+Sete testes passaram: engine, app, atmosphere, mouse-fluid, shot-fluid, nucleus e ori-orbs. O teste novo cobre os cinco tipos, alocação somente após impacto, um único contexto para os cinco, limite de atualização, cópia em noventa marcadores sem novos passes de simulação, troca de paleta, liberação dos oito buffers e alternativa para WebGL indisponível. Os testes com contexto simulado não comprovam compilação dos shaders.
+
+Na prévia do Chrome com noventa posições salvas, o renderizador informou v7; os shaders executaram sem erros observados. O fundo permaneceu visível através da camada e os estilos selecionados atualizaram as estações existentes. Os tempos de submissão JavaScript observados ficaram aproximadamente em 0,13–0,28 ms por atualização da textura, nessa prévia. Isso não mede tempo de GPU, CPU total do processo, FPS sustentado ou consumo no Lively; não constitui comparação quantitativa entre versões. O custo de simulação é fixo por tipo ativo, enquanto o custo de desenhar as cópias cresce com a quantidade de marcadores visíveis.
+
+Os cinco tipos foram inspecionados visualmente, assim como a cor personalizada e o retorno ao HUD original. Capturas: `outputs/orbe-v7-vortice.png`, `orbe-v7-combustao.png`, `orbe-v7-eter.png`, `orbe-v7-plasma.png` e `orbe-v7-estrela.png`. A prévia não desenha os ícones reais do Windows e não comprova a legibilidade sobre cada ícone físico. O servidor temporário da conferência foi encerrado.
+
+Instalação: vinte e um arquivos conferidos por hash e uma instância ativa recarregada no monitor 3440×1440. Mapa e preferências preservados; as cinco opções e a escolha de paleta foram acrescentadas ao esquema de propriedades.

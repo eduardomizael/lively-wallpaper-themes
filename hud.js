@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   const { TAU, clamp, shotPosition } = root.CircuitEngine;
-  function drawScene(ctx, system, config, rgba, nucleusSprites) {
+  function drawScene(ctx, system, config, rgba, nucleusSprites, oriOrbs) {
     const intensity = config.glow / 100;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     function arc(x, y, r, start, length, opacity, width = 1) {
@@ -19,7 +19,8 @@
       const rotation = system.time * .58 + station.spin;
       const hit = Math.max(0, 1 - (system.time - station.hitTime) / .42);
       const flare = Math.max(hit, station.emission / .2);
-      if (config.markerStyle === 1 && nucleusSprites) {
+      if (config.markerStyle >= 2 && oriOrbs?.drawStation(ctx,station,system.time,charge,flare,opacity,intensity)) continue;
+      if (config.markerStyle >= 1 && nucleusSprites) {
         root.CircuitNucleus.drawStation(ctx, nucleusSprites, station, system.time, charge, flare, opacity, intensity);
         continue;
       }

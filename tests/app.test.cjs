@@ -24,7 +24,9 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, '../atmosphere.js'), 'utf8'
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../mouse-fluid.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../shot-fluid.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../nucleus.js'), 'utf8'), context);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../ori-orbs.js'), 'utf8'), context);
 const realDraw = page.CircuitHud.drawScene;
+element('#scene').dataset={};
 page.CircuitHud.drawScene = (...args) => { draws++; simulationTime = args[1].time; realDraw(...args); };
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8'), context);
 assert.equal(typeof frame, 'function', 'Atmosphere can animate without icons');
@@ -68,4 +70,8 @@ events.mousedown({button:2,clientX:400,clientY:300});assert.equal(clicks,1);
 events.mousedown({button:0,clientX:400,clientY:300,target:{closest:()=>true}});assert.equal(clicks,1,'Preview controls do not cause explosions');
 page.livelyPropertyListener('clickBurst',false);
 events.mousedown({button:0,clientX:400,clientY:300});assert.equal(clicks,1,'Click explosion can be disabled separately');
+page.livelyPropertyListener('markerStyle',6);assert.equal(element('#markerStyle').value,6);
+element('#orbOriginalColors').type='checkbox';page.livelyPropertyListener('orbOriginalColors',false);assert.equal(element('#orbOriginalColors').checked,false);
+for(let i=0;i<20;i++)frame(clock+500+i*34);
+assert.equal(element('#scene').dataset.orbRenderer,'compatibility','Unsupported WebGL uses the previous procedural nucleus after the first impact');
 console.log('HUD, limite de FPS, monitor vazio e coleta unica: OK');

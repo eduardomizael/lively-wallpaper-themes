@@ -1,6 +1,16 @@
 # Circuit Orbit · Impact HUD
 
-Versão `2.4.0-beta.2`, na branch `codex/marcador-nucleo-nevoa`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+Versão `2.5.0-beta.1`, na branch `codex/marcadores-orbes-v7`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+
+## Cinco marcadores dos estudos v7
+
+O seletor **Marcador** oferece também **Vórtice Solar**, **Combustão Radial**, **Pulso de Éter**, **Tempestade de Plasma** e **Estrela Solar**. São os cinco arquétipos dos arquivos `ori-energy-spheres/app.js` e `shaders.js` fornecidos pelo usuário; a pasta de estudo fica preservada. A vitrine do estudo é uma composição das cinco esferas, não um sexto marcador.
+
+`ori-orb-shaders.js` preserva os shaders v7 e adapta apenas a saída: fundo transparente, bordas suaves e composição sobre o wallpaper. `ori-orbs.js` adapta o simulador e os emissores para uma imagem compartilhada de 256×256, com grade física de 128×128, 12 iterações de pressão e atualização máxima de 30 Hz. O custo da simulação não cresce com o número de ícones; cada marcador desenha uma cópia da imagem, com orientação e pulsação próprias. Os movimentos internos da esfera e da fumaça são compartilhados. Nenhum serviço ou agendador paralelo é iniciado.
+
+Os marcadores aparecem somente no impacto, contraem e intensificam na carga, expandem no disparo e usam a mesma permanência percentual. **Cores originais dos orbes** mantém as paletas dos estudos; desmarque para usar **Cor dos efeitos**. Brilho e tamanho continuam nos controles existentes. Trocar de estilo preserva o percurso e as estações atingidas. Display futurista e Núcleo de névoa mantêm os valores antigos (0 e 1), e a escolha salva é preservada na atualização.
+
+Sem WebGL2/float, os cinco estilos usam o núcleo procedural anterior como alternativa. A miniatura existente representa esse núcleo, ainda disponível no seletor. Não há captura automática de ícones nem recursos gráficos extraídos dos jogos.
 
 ## Explosão de energia ao clicar
 

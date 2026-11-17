@@ -16,8 +16,10 @@
   let sprites = A.createSprites(makeCanvas, config.accent), fogDirty = true, lastFog = -1;
   controls.hidden = !preview;
   let nucleusSprites = window.CircuitNucleus.createSprites(makeCanvas, config.accent);
+  const oriOrbs = new window.CircuitOriOrbs.Orbs(makeCanvas);
   config.markerStyle = 1;
-  ranges.markerStyle = [0, 1];
+  ranges.markerStyle = [0, 6];
+  config.orbOriginalColors = true;
   config.shotStyle = 1;
   ranges.shotStyle = [0, 1];
   config.clickBurst = true;
@@ -87,9 +89,10 @@
     if (name === 'collectIcons') { collectIcons(); return; }
     if (!(name in config)) return;
     if (name === 'accent') { if (!/^#[\da-f]{6}$/i.test(value)) return; }
-    else if (name === 'grid' || name === 'mouseFog' || name === 'clickBurst') value = value === true || value === 'true';
+    else if (name === 'grid' || name === 'mouseFog' || name === 'clickBurst' || name === 'orbOriginalColors') value = value === true || value === 'true';
     else { value = Number(value); if (!Number.isFinite(value)) return; value = E.clamp(value, ...ranges[name]); }
     config[name] = value;
+    if (name === 'markerStyle' && value < 2) oriOrbs.dispose();
     if (name === 'shotStyle') shotFluid.clear();
     if (name === 'accent') { sprites = A.createSprites(makeCanvas, config.accent); nucleusSprites = window.CircuitNucleus.createSprites(makeCanvas, config.accent); }
     if (name === 'accent' || name === 'fogStrength') fogDirty = true;
@@ -161,6 +164,9 @@
     const previousSequence = system?.sequence;
     const shotBefore = shotFluid.capture(system);
     system?.update(dt);
+    oriOrbs.update(dt,system,config);
+    canvas.dataset.orbRenderer = config.markerStyle>=2?(oriOrbs.ready?'v7':oriOrbs.failed?'compatibility':'idle'):'off';
+    if(oriOrbs.stats.frames) canvas.dataset.orbSubmitMs = (oriOrbs.stats.totalMs/oriOrbs.stats.frames).toFixed(2);
     shotFluid.update(dt,system,shotBefore,config);
     if (config.impactStrength > 0 && system?.sequence !== previousSequence && system?.current) field.impact(system.current);
     if (fogDirty || (config.fogStrength > 0 && field.time - lastFog >= .05)) {
@@ -170,7 +176,7 @@
     ctx.clearRect(0, 0, width, height);
     A.drawDetails(ctx, field, sprites, config, rgba,fluid.supported);
     shotFluid.drawFallback(ctx,nucleusSprites,config);
-    if (system?.icons.length) window.CircuitHud.drawScene(ctx, system, config, rgba, nucleusSprites);
+    if (system?.icons.length) window.CircuitHud.drawScene(ctx, system, config, rgba, nucleusSprites, oriOrbs);
     schedule();
   }
   if (demo) {
