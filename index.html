@@ -18,7 +18,8 @@
     <label>Velocidade do tiro <input id="speed" type="range" min="40" max="800" step="10" value="160"></label>
     <label>Brilho <input id="glow" type="range" min="10" max="100" value="70"></label>
     <label>Rastro do tiro <input id="trail" type="range" min="60" max="700" value="180"></label>
-    <label>Tamanho do display (%) <input id="circleSize" type="range" min="40" max="200" step="5" value="100"></label>
+    <label>Marcador <select id="markerStyle"><option value="0">Display futurista</option><option value="1" selected>Núcleo de névoa</option></select></label>
+    <label>Tamanho do marcador (%) <input id="circleSize" type="range" min="40" max="200" step="5" value="100"></label>
     <label>Tempo de carga (ms) <input id="chargeTime" type="range" min="300" max="2400" step="100" value="1000"></label>
     <label>Permanência (%) <input id="persistencePercent" type="range" min="1" max="99" step="1" value="60"></label>
     <label>Quadros por segundo <select id="frameRate"><option value="0">30 FPS</option><option value="1" selected>60 FPS</option></select></label>
@@ -39,6 +40,7 @@
   <script src="engine.js"></script>
   <script src="atmosphere.js"></script>
   <script src="mouse-fluid.js"></script>
+  <script src="nucleus.js"></script>
   <script src="hud.js"></script>
   <script src="app.js"></script>
 </body>

@@ -32,11 +32,15 @@ vm.runInContext(fs.readFileSync(path.join(root,'hud.js'),'utf8'),context);
 vm.runInContext(fs.readFileSync(path.join(root,'atmosphere.js'),'utf8'),context);
 const A = context.window.CircuitAtmosphere;
 const field = new A.Atmosphere(640,360), assets = [];
-const sprites = A.createSprites((width,height) => {
+const makeCanvas = (width,height) => {
   const asset = { width,height,commands:[] }, assetId = assets.length;
   assets.push(asset);
   return { assetId,getContext:()=>({createRadialGradient:ctx.createRadialGradient,createImageData:(w,h)=>({width:w,height:h,data:new Uint8ClampedArray(w*h*4)}),putImageData(image){asset.rgbaBase64=Buffer.from(image.data).toString('base64');},fillRect(x,y,w,h){asset.commands.push({op:'rect',rect:[x,y,w,h],style:this.fillStyle})}}) };
-},config.accent);
+};
+const sprites = A.createSprites(makeCanvas,config.accent);
+vm.runInContext(fs.readFileSync(path.join(root,'nucleus.js'),'utf8'),context);
+const nucleusSprites = context.window.CircuitNucleus.createSprites(makeCanvas,config.accent);
+config.markerStyle = 1;
 function step() {
   // The catalogue thumbnail illustrates the HUD/ambient scene; mouse fluid needs a live WebGL context.
   field.update(1/20); const previous = system.sequence;
@@ -49,7 +53,7 @@ for (let i=0;i<120;i++) {
   step(); commands = [];
   A.drawFog(ctx,field,sprites,config.fogStrength);
   A.drawDetails(ctx,field,sprites,config,alpha => `rgba(73,229,255,${alpha})`);
-  context.window.CircuitHud.drawScene(ctx,system,config,alpha => `rgba(73,229,255,${alpha})`);
+  context.window.CircuitHud.drawScene(ctx,system,config,alpha => `rgba(73,229,255,${alpha})`,nucleusSprites);
   frames.push(commands);
 }
 fs.writeFileSync(path.join(out,'commands.json'), JSON.stringify({ width:640,height:360,fps:20,icons,assets,frames }));

@@ -14,6 +14,9 @@
   const makeCanvas = (width, height) => { const image = document.createElement('canvas'); image.width = width; image.height = height; return image; };
   let sprites = A.createSprites(makeCanvas, config.accent), fogDirty = true, lastFog = -1;
   controls.hidden = !preview;
+  let nucleusSprites = window.CircuitNucleus.createSprites(makeCanvas, config.accent);
+  config.markerStyle = 1;
+  ranges.markerStyle = [0, 1];
   const rgba = alpha => `rgba(${rgb},${alpha})`;
   function schedule() {
     if ((system?.icons.length || field.moving(config) || fluid.active) && !framePending) { framePending = true; requestAnimationFrame(frame); }
@@ -81,7 +84,7 @@
     else if (name === 'grid' || name === 'mouseFog') value = value === true || value === 'true';
     else { value = Number(value); if (!Number.isFinite(value)) return; value = E.clamp(value, ...ranges[name]); }
     config[name] = value;
-    if (name === 'accent') sprites = A.createSprites(makeCanvas, config.accent);
+    if (name === 'accent') { sprites = A.createSprites(makeCanvas, config.accent); nucleusSprites = window.CircuitNucleus.createSprites(makeCanvas, config.accent); }
     if (name === 'accent' || name === 'fogStrength') fogDirty = true;
     if (name === 'impactStrength' && !value) field.waves = [];
     if ((name === 'mouseFog' || name === 'mouseFogStrength') && !value) {field.clearPointer();fluid.clear();}
@@ -153,7 +156,7 @@
     }
     ctx.clearRect(0, 0, width, height);
     A.drawDetails(ctx, field, sprites, config, rgba,fluid.supported);
-    if (system?.icons.length) window.CircuitHud.drawScene(ctx, system, config, rgba);
+    if (system?.icons.length) window.CircuitHud.drawScene(ctx, system, config, rgba, nucleusSprites);
     schedule();
   }
   if (demo) {

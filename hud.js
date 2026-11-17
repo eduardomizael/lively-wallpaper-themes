@@ -1,7 +1,7 @@
 (function (root) {
   'use strict';
   const { TAU, clamp, shotPosition } = root.CircuitEngine;
-  function drawScene(ctx, system, config, rgba) {
+  function drawScene(ctx, system, config, rgba, nucleusSprites) {
     const intensity = config.glow / 100;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     function arc(x, y, r, start, length, opacity, width = 1) {
@@ -19,6 +19,10 @@
       const rotation = system.time * .58 + station.spin;
       const hit = Math.max(0, 1 - (system.time - station.hitTime) / .42);
       const flare = Math.max(hit, station.emission / .2);
+      if (config.markerStyle === 1 && nucleusSprites) {
+        root.CircuitNucleus.drawStation(ctx, nucleusSprites, station, system.time, charge, flare, opacity, intensity);
+        continue;
+      }
       // Only a recently hit station exists here. No rings are drawn for untouched icons.
       for (let i = 0; i < 3; i++) arc(x, y, r, rotation + i * TAU / 3, .96, opacity * (.4 + flare * .5), 1.1);
       for (let i = 0; i < 2; i++) arc(x, y, r * 1.18, -rotation * .72 + i * Math.PI, .52, opacity * .3);

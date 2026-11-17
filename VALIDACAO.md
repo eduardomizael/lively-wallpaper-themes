@@ -1,4 +1,4 @@
-# Validação — Impact HUD 2.2.0-beta.1
+# Validação — Circuit Orbit 2.3.0-beta.1
 
 ## Testes locais
 
@@ -66,3 +66,12 @@ Na prévia do Chrome, o Canvas informou renderer fluid; movimento do mouse produ
 A miniatura do catálogo representa ambiente e HUD, sem cursor sintético: o gerador offline não executa o fluido WebGL.
 
 Instalação desta revisão: dezessete arquivos de execução copiados e hashes conferidos. Nenhuma instância da v2 estava ativa; o tema Fluids que estava selecionado foi mantido. Para visualizar a revisão instalada, selecione Circuit Orbit no catálogo do Lively.
+
+## Marcador núcleo de névoa — 2.3.0-beta.1
+
+- Cinco testes passaram: engine, app, atmosphere, mouse-fluid e nucleus. O novo teste verifica texturas deformadas, centro com pelo menos 92% de transparência, ausência antes do impacto, ausência de arcos no estilo névoa, preservação do HUD original e descarte visual após o fade.
+- Chrome: novo controle seleciona os dois estilos; o HUD foi observado novamente após a troca e a névoa restaurada. Os ícones atingidos permaneceram na cena. Sem erros ou avisos no console observado. Captura em `outputs/previa-nucleo-nevoa.png`.
+- O atlas procedural compartilhado contém 24 quadros de 192×192 (~3,4 MiB de pixels RGBA antes das cópias do navegador). Usa até quatro imagens por estação e não mantém histórico por ícone.
+- A nova miniatura usa o mesmo atlas e renderizador dos marcadores. Não há simulação de refração do desktop: o efeito de calor é visual, por pulsação, deformação e pluma ascendente.
+- A medição de CPU/GPU e a conferência de legibilidade sobre os ícones físicos no desktop ainda não foram realizadas nesta revisão.
+- Instalação: dezoito arquivos conferidos por hash e uma instância ativa da v2 recarregada no mesmo monitor. O mapa e as preferências existentes foram preservados; o seletor de marcador foi acrescentado. O GIF regenerado foi decodificado integralmente sem erro.

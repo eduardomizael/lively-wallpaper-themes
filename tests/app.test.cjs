@@ -22,6 +22,7 @@ const context = vm.createContext(page);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../hud.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../atmosphere.js'), 'utf8'), context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../mouse-fluid.js'), 'utf8'), context);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../nucleus.js'), 'utf8'), context);
 const realDraw = page.CircuitHud.drawScene;
 page.CircuitHud.drawScene = (...args) => { draws++; simulationTime = args[1].time; realDraw(...args); };
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8'), context);

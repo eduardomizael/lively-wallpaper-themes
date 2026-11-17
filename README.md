@@ -1,6 +1,14 @@
 # Circuit Orbit · Impact HUD
 
-Versão 2.2.0-beta.1 consolidada na main. As versões anteriores estão preservadas nas tags Git, desde v1.0.0. Branches de desenvolvimento são removidas após incorporação à main; cada nova alteração recebe sua própria branch.
+Versão `2.3.0-beta.1`, na branch `codex/marcador-nucleo-nevoa`. A versão `2.2.0-beta.1` está consolidada na main. As versões anteriores estão preservadas nas tags Git, desde `v1.0.0`.
+
+## Marcador alternativo: núcleo de névoa
+
+O controle **Marcador** alterna entre **Display futurista** e **Núcleo de névoa**, selecionado por padrão nesta revisão. A troca preserva os ícones já atingidos, a carga atual e a ordem dos tiros. Nenhum marcador aparece antes do impacto.
+
+O núcleo usa fumaça procedural irregular, com filamentos, pulsação e uma pluma ascendente. Seu centro é mais transparente para manter o ícone legível. Na carga, contrai e intensifica o brilho; o impacto e o disparo produzem um pulso. A cor, o brilho, o tamanho e a permanência existentes também controlam esse estilo. A permanência percentual e o fade de 900 ms são os mesmos do display.
+
+`nucleus.js` gera uma sequência cíclica compartilhada de 24 texturas de 192×192, com interpolação entre quadros. Cada estação tem uma fase diferente; não existe uma simulação WebGL por ícone nem acúmulo de partículas. A sequência é criada ao abrir e recriada ao trocar a cor. O custo real no Lively ainda não foi medido. A névoa do mouse continua usando sua camada WebGL independente.
 
 ## Animação
 

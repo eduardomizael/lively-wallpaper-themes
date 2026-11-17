@@ -1,0 +1,29 @@
+const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm');
+const E = require('../engine.js'), root = { CircuitEngine: E };
+const context = vm.createContext({ window: root, Math });
+for (const name of ['nucleus','hud']) vm.runInContext(fs.readFileSync(`${__dirname}/../${name}.js`,'utf8'),context);
+const images = [];
+const sprites = root.CircuitNucleus.createSprites((w,h)=>({getContext:()=>({
+  createImageData:()=>({data:new Uint8ClampedArray(w*h*4)}),putImageData:image=>images.push(image.data)
+})}), '#49e5ff');
+assert.equal(sprites.length,24);
+const center=(96*192+96)*4+3;
+assert.ok(images.every(image=>image[center]<=20),'Every frame leaves the icon center at least 92% transparent');
+assert.notDeepEqual(images[0],images[12],'The density deforms over time');
+let draws=0, arcs=0, invalid=false;
+const ctx=new Proxy({globalAlpha:1,drawImage(...args){draws++; invalid ||= args.slice(1).some(v=>!Number.isFinite(v));},arc(){arcs++;},createRadialGradient(){return {addColorStop(){}};}},{get:(t,k)=>t[k]||(()=>{})});
+const config={markerStyle:1,glow:70,accent:'#49e5ff'};
+const system=new E.PulseSystem([{id:0,x:100,y:100,radius:24}],{width:400,height:400});
+system.shot=null;
+root.CircuitHud.drawScene(ctx,system,config,()=>'',sprites);
+assert.equal(draws,0,'No mist before an icon is hit');
+system.impact(system.icons[0]);system.time=.3;
+root.CircuitHud.drawScene(ctx,system,config,()=>'',sprites);
+assert.ok(draws>0);assert.equal(arcs,0,'Mist mode does not draw futuristic rings');assert.equal(invalid,false);assert.equal(ctx.globalAlpha,1);
+const count=draws;config.markerStyle=0;
+root.CircuitHud.drawScene(ctx,system,config,()=>'',sprites);
+assert.equal(draws,count);assert.ok(arcs>0,'The original HUD remains selectable');
+const station=system.stations.get(0);station.fadeStartedAt=0;system.current=null;system.time=2;
+config.markerStyle=1;root.CircuitHud.drawScene(ctx,system,config,()=>'',sprites);
+assert.equal(draws,count,'Expired stations draw no mist');
+console.log('Nucleo: centro transparente, deformacao, impacto, alternancia e fade: OK');
