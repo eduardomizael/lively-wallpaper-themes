@@ -1,0 +1,121 @@
+LANTERN SKY — CLIMA, ASTRONOMIA E PAISAGENS
+
+NO LIVELY
+Recarregue o wallpaper e abra Personalizar.
+Em “Clima e Lua locais”, informe cidade e código do país (BR, PT etc.).
+Confira a cidade/estado/país no painel. Use “Local encontrado” se houver homônimos.
+Intervalo meteorológico: 5 a 180 minutos; padrão 30.
+Sol, Lua e céu acompanham a data/hora e as coordenadas escolhidas.
+O relógio do computador deve estar correto.
+
+MELHORIAS
+- Sol e Lua se movem numa composição panorâmica: leste à esquerda, sul no
+  centro e oeste à direita. É uma representação artística, não um planetário.
+  As posições são recalculadas a cada segundo durante a animação.
+  A iluminação de fundo é atualizada a cada minuto, com transições suaves.
+- Lanternas: papel e halo se adaptam à luz do dia.
+- Nuvens: luz diurna, tons dourados no crepúsculo e iluminação lunar.
+- Cores, nuvens, paisagem e precipitação mudam gradualmente. Duração ajustável
+  de 1 a 120 segundos, padrão 20. Ao mudar a condição durante uma transição,
+  o próximo efeito parte do estado visual atual.
+- Rajadas influenciam lanternas, nuvens e chuva. A força e os relâmpagos
+  podem ser ajustados ou desligados separadamente.
+- Paisagens: somente céu; montanhas; lago e montanhas; lago com portal;
+  montanhas com floresta. O lago reflete céu, nuvens, lanternas e astros.
+- A Lua reduz a visibilidade das estrelas e da Via Láctea conforme sua
+  iluminação e presença acima do horizonte.
+- Uma opção de mostrar/ocultar informações. Normalmente exibe só cidade,
+  temperatura e condição em uma linha, separadas por “·”. Ao clicar, o próprio
+  cartão se expande para cima e para a esquerda com animação suave, revelando
+  os detalhes. Clique novamente, clique fora ou pressione Esc para recolher.
+
+DEMONSTRAÇÃO E NAVEGADOR
+Em “Experimentar cenário”, escolha dia, pôr do sol, noite, chuva, tempestade,
+neve, neblina, Lua cheia ou amanhecer. O modo de demonstração funciona offline.
+Você pode ajustar a fase lunar de demonstração; “Lua cheia” fixa essa fase.
+Volte a “Condições reais” para retomar sua localidade.
+
+Abra preview.html no navegador para uma prévia com controles próprios.
+Também é possível abrir index.html?preview=1. O index.html sem esse parâmetro
+abre a animação sem os controles de prévia.
+As escolhas da prévia não alteram as configurações do Lively.
+As condições reais na prévia requerem cidade/país e acesso à internet.
+
+CONTROLES MANUAIS
+Desligue “Ativar condições locais” e mantenha “Condições reais” na demonstração
+para restaurar as cores, nuvens e Lua manuais.
+“Acompanhar dia e noite” desligado mantém uma interpretação noturna do clima:
+a Lua fica em uma posição artística fixa, mesmo abaixo do horizonte real.
+“Mover Sol e Lua” desligado mantém os astros em posições fixas da composição.
+Os ajustes manuais anteriores e a cidade configurada são preservados na atualização.
+
+SEM INTERNET
+Mantém o último clima recebido para a mesma localidade, informa dados antigos
+e tenta novamente em até cinco minutos. O cache fica no navegador do Lively.
+A astronomia continua se a localidade já foi resolvida. Sem clima anterior,
+as nuvens permanecem manuais até uma consulta bem-sucedida.
+A temperatura aparece após uma consulta que inclua esse campo.
+O horário da última consulta no painel usa o fuso do computador.
+
+FONTES METEOROLÓGICAS E RADAR
+Em Personalizar → Clima e Lua locais, escolha “Fonte meteorológica”.
+- WeatherAPI, com reserva Open-Meteo (padrão): usa WeatherAPI se houver chave.
+  Sem chave ou em caso de falha, usa Open-Meteo e indica o motivo no painel.
+- Open-Meteo: usa apenas esse serviço para temperatura, vento, nuvens e condição.
+
+Para WeatherAPI, crie uma conta em https://www.weatherapi.com/signup.aspx e
+cole a chave em “Chave WeatherAPI” nas configurações do Lively.
+Não é necessário colocar a chave no código ou enviá-la por mensagem.
+A chave é salva no arquivo local de preferências do Lively e enviada apenas
+ao domínio api.weatherapi.com nas consultas. O cache meteorológico não guarda
+a chave. A prévia do navegador tem seu próprio campo de chave.
+
+O painel mostra a fonte efetivamente utilizada, o horário do dado e o horário
+da consulta. Fazer uma nova consulta não significa que o provedor publicou uma
+nova observação. O horário do dado usa o fuso da localidade; a consulta usa o
+fuso do computador. Dados antigos são identificados no painel.
+
+RainViewer: o radar é independente da fonte meteorológica e consultado a cada
+5 minutos por padrão (ajustável de 5 a 30). Usa apenas quadros com até 20 minutos
+e cobertura indicada pela máscara do serviço. Ecos de pelo menos 15 dBZ em
+mais de um pixel próximo ao ponto podem ativar chuva no cenário. A intensidade
+é uma aproximação artística, não uma medição de chuva no solo.
+
+O ponto é o centro da cidade escolhido na busca, não a posição exata da casa.
+A área analisada é de aproximadamente 2 a 3 km; a resolução é limitada pelos
+tiles disponíveis. A máscara de cobertura não garante que cada radar esteja
+operacional naquele instante. O horário do quadro também pode diferir do
+horário da medição de cada radar que compõe a imagem.
+
+“Sem eco” não significa certeza de tempo seco: nunca cancela chuva informada
+pela fonte meteorológica. Sem cobertura, com dados antigos ou falha, o radar
+não altera o clima. No painel, chuva inferida por radar é identificada como
+“Chuva nas proximidades”; a condição da outra fonte continua disponível.
+
+Os créditos e links das fontes ficam no painel completo, acessível clicando
+na linha resumida. Ao desmarcar “Mostrar painel de informações”, todo o painel
+é ocultado. Ele começa recolhido ao reabrir o wallpaper.
+O modo de demonstração não faz consultas meteorológicas ou de radar.
+
+Fontes: https://www.weatherapi.com/ e https://www.rainviewer.com/
+Reserva e geocodificação: https://open-meteo.com/ (dados CC BY 4.0).
+https://creativecommons.org/licenses/by/4.0/
+Use os serviços segundo as condições do plano contratado. A API pública
+RainViewer é destinada ao uso pessoal/educacional; não exige chave.
+Cidade/país são enviados à busca Open-Meteo; as coordenadas resolvidas vão para
+o provedor de clima escolhido e para os tiles RainViewer quando habilitados.
+Não se utiliza localização automática por GPS/IP.
+
+Astronomia continua local: SunCalc 1.9.0 (BSD-2-Clause).
+https://github.com/mourner/suncalc/tree/v1.9.0 — veja SunCalc-LICENSE.txt.
+Mantida a autoria original do tema no LivelyInfo.json.
+
+VALIDAÇÃO DAS FONTES
+WeatherAPI: integração verificada com respostas simuladas, incluindo chave
+inválida, reserva, códigos de condição, temperatura e precipitação. A consulta
+real à WeatherAPI depende da chave do usuário.
+Open-Meteo e RainViewer: consultas reais verificadas no Microsoft Edge, abrindo
+o wallpaper como arquivo local, incluindo leitura de pixels e cobertura para
+Itumbiara. O quadro consultado não confirmou eco de chuva no centro da cidade.
+Testes também cobrem quadros antigos, falta de cobertura, indisponibilidade,
+cache, créditos e retorno ao modo manual.

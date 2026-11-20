@@ -1,0 +1,52 @@
+{
+  "fishCount": {
+    "text": "Quantidade de Carpas (1 a 5)",
+    "type": "slider",
+    "min": 1,
+    "max": 5,
+    "step": 1,
+    "value": 5
+  },
+  "burstFrequency": {
+    "text": "Frequência de Impulsos (%)",
+    "type": "slider",
+    "min": 30,
+    "max": 250,
+    "step": 5,
+    "value": 100
+  },
+  "baseSpeed": {
+    "text": "Velocidade Base (%)",
+    "type": "slider",
+    "min": 40,
+    "max": 210,
+    "step": 5,
+    "value": 100
+  },
+  "causticsIntensity": {
+    "text": "Intensidade das Cáusticas (%)",
+    "type": "slider",
+    "min": 0,
+    "max": 220,
+    "step": 5,
+    "value": 105
+  },
+  "fishScale": {
+    "text": "Tamanho das Carpas (%)",
+    "type": "slider",
+    "min": 55,
+    "max": 165,
+    "step": 5,
+    "value": 92
+  },
+  "interactiveMouse": {
+    "text": "Interação com o mouse (fuga, curiosidade e petiscos)",
+    "type": "checkbox",
+    "value": true
+  },
+  "showGui": {
+    "text": "Exibir painel recolhido na tela",
+    "type": "checkbox",
+    "value": false
+  }
+}

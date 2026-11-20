@@ -1,0 +1,2055 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Koi Pond · 5 Carpas Koi 3D</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #020c18;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #pond-canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* Estilo discreto e elegante para o lil-gui combinando com o lago */
+    .lil-gui.root {
+      --background-color: rgba(4, 22, 36, 0.78);
+      --text-color: #d8eef5;
+      --title-background-color: rgba(8, 44, 66, 0.85);
+      --title-text-color: #e6f7fc;
+      --widget-color: rgba(18, 74, 102, 0.65);
+      --hover-color: rgba(28, 104, 138, 0.8);
+      --focus-color: rgba(42, 134, 172, 0.9);
+      --number-color: #6fe3f7;
+      --string-color: #ff9c59;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(110, 215, 240, 0.18);
+      border-radius: 6px;
+      top: 12px !important;
+      right: 12px !important;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    .lil-gui.hidden-gui {
+      display: none !important;
+    }
+  </style>
+
+</head>
+<body>
+  <canvas id="pond-canvas"></canvas>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/lil-gui.min.js"></script>
+  <script>
+    (() => {
+    // =========================================================================
+    // 1. CONFIGURAÇÃO GLOBAL (SINCRONIZADA COM LIL-GUI E LIVELY WALLPAPER)
+    // =========================================================================
+    const params = {
+      fishCount: 5,             // Quantidade de carpas ativas (1 a 5)
+      burstFrequency: 1.0,      // Multiplicador de frequência dos impulsos (0.3 a 2.5)
+      baseSpeed: 2.25,          // Velocidade base de cruzeiro
+      causticsIntensity: 1.05,  // Intensidade das cáusticas
+      fishScale: 0.92,          // Escala global das carpas
+      interactiveMouse: true,   // Fuga ao mover, curiosidade parado, petisco ao clicar
+      showGui: true,            // Mostrar/ocultar painel recolhido
+      dropTreatCenter: () => spawnTreat((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 4),
+      triggerAllBursts: () => fishList.forEach(f => { if (f.visible) triggerFishBurst(f, 1.0); })
+    };
+
+    // =========================================================================
+    // 2. RENDERER, CENA E CÂMERA TOP-DOWN
+    // =========================================================================
+    const canvas = document.getElementById('pond-canvas');
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: 'high-performance'
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x020d1a);
+
+    const CAMERA_Y = 27.5;
+    const camera = new THREE.PerspectiveCamera(
+      38,
+      window.innerWidth / window.innerHeight,
+      0.5,
+      100
+    );
+    camera.position.set(0, CAMERA_Y, 0);
+    camera.up.set(0, 0, -1); // -Z aponta para o topo da tela
+    camera.lookAt(0, 0, 0);
+
+    const worldBounds = { halfW: 13, halfH: 7.5 };
+    function updateBounds() {
+      const vFovRad = THREE.MathUtils.degToRad(camera.fov);
+      const visibleH = 2 * Math.tan(vFovRad * 0.5) * CAMERA_Y;
+      const visibleW = visibleH * camera.aspect;
+      worldBounds.halfW = visibleW * 0.5;
+      worldBounds.halfH = visibleH * 0.5;
+    }
+    updateBounds();
+
+    // =========================================================================
+    // 3. SHADERS DE ÁGUA, FUNDO DO LAGO E CÁUSTICAS (VORONOI EM CAMADAS)
+    // =========================================================================
+    const MAX_RIPPLES = 22;
+    const rippleData = Array.from({ length: MAX_RIPPLES }, () => new THREE.Vector4(999, 999, -99, 0));
+    let rippleIndex = 0;
+
+    function spawnRipple(x, z, strength = 1.0) {
+      rippleData[rippleIndex].set(x, z, clockTime, strength);
+      rippleIndex = (rippleIndex + 1) % MAX_RIPPLES;
+    }
+
+    const CAUSTICS_GLSL = /* glsl */ `
+      vec2 hash22(vec2 p) {
+        p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+        return fract(sin(p) * 43758.5453123);
+      }
+
+      float voronoiCaustic(vec2 uv, float t) {
+        vec2 n = floor(uv);
+        vec2 f = fract(uv);
+
+        float md = 8.0;
+        float md2 = 8.0;
+
+        for (int j = -1; j <= 1; j++) {
+          for (int i = -1; i <= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 o = hash22(n + g);
+            o = 0.5 + 0.42 * sin(t + 6.2831 * o);
+            vec2 r = g + o - f;
+            float d = dot(r, r);
+            if (d < md) {
+              md2 = md;
+              md = d;
+            } else if (d < md2) {
+              md2 = d;
+            }
+          }
+        }
+        float edge = sqrt(md2) - sqrt(md);
+        return pow(clamp(1.0 - smoothstep(0.0, 0.24, edge), 0.0, 1.0), 2.2);
+      }
+
+      float layeredCaustics(vec2 worldXZ, float t) {
+        vec2 p1 = worldXZ * 0.34 + vec2(t * 0.045, -t * 0.032);
+        vec2 p2 = worldXZ * 0.52 + vec2(-t * 0.038, t * 0.041);
+        p1 += 0.18 * vec2(sin(worldXZ.y * 0.45 + t * 0.6), cos(worldXZ.x * 0.42 - t * 0.5));
+        p2 += 0.14 * vec2(cos(worldXZ.y * 0.58 - t * 0.55), sin(worldXZ.x * 0.51 + t * 0.48));
+
+        float c1 = voronoiCaustic(p1, t * 0.85);
+        float c2 = voronoiCaustic(p2 + vec2(4.2, 1.7), t * 1.05);
+
+        return c1 * 0.62 + c2 * 0.55 + (c1 * c2) * 0.95;
+      }
+
+      float rippleField(vec2 worldXZ, float t, vec4 ripples[22]) {
+        float sum = 0.0;
+        for (int i = 0; i < 22; i++) {
+          float age = t - ripples[i].z;
+          if (age > 0.0 && age < 4.2 && ripples[i].w > 0.001) {
+            float dist = length(worldXZ - ripples[i].xy);
+            float radius = age * 2.75;
+            float ring = exp(-pow((dist - radius) * 1.75, 2.0));
+            float wave = sin((dist - radius) * 11.0);
+            float fade = exp(-age * 1.05) * ripples[i].w;
+            sum += ring * (0.55 + 0.45 * wave) * fade;
+          }
+        }
+        return sum;
+      }
+    `;
+
+    // 3.1 Fundo do Lago (y = -3.4)
+    const pondBottomUniforms = {
+      uTime: { value: 0 },
+      uCausticsIntensity: { value: params.causticsIntensity },
+      uHalfSize: { value: new THREE.Vector2(worldBounds.halfW, worldBounds.halfH) },
+      uRipples: { value: rippleData }
+    };
+
+    const pondBottomMat = new THREE.ShaderMaterial({
+      uniforms: pondBottomUniforms,
+      depthWrite: true,
+      vertexShader: /* glsl */ `
+        varying vec2 vWorldXZ;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldXZ = wp.xz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uCausticsIntensity;
+        uniform vec2 uHalfSize;
+        uniform vec4 uRipples[22];
+        varying vec2 vWorldXZ;
+
+        ${CAUSTICS_GLSL}
+
+        float valueNoise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+          float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+          float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+          float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        }
+
+        void main() {
+          vec2 normPos = vWorldXZ / max(uHalfSize, vec2(1.0));
+          float radialDist = length(normPos * vec2(0.88, 1.0));
+          float centerGlow = exp(-radialDist * radialDist * 1.45);
+
+          vec3 edgeNavy = vec3(0.008, 0.038, 0.088);
+          vec3 midDeepTeal = vec3(0.025, 0.145, 0.215);
+          vec3 centerPetrol = vec3(0.058, 0.305, 0.375);
+
+          vec3 bg = mix(edgeNavy, midDeepTeal, smoothstep(1.35, 0.15, radialDist));
+          bg = mix(bg, centerPetrol, centerGlow * 0.85);
+
+          float grit = valueNoise(vWorldXZ * 0.9) * 0.55 + valueNoise(vWorldXZ * 2.4) * 0.3 + valueNoise(vWorldXZ * 5.2) * 0.15;
+          bg *= (0.91 + 0.16 * grit);
+
+          float rip = rippleField(vWorldXZ, uTime, uRipples);
+          vec2 refractedXZ = vWorldXZ + vec2(rip * 0.14, -rip * 0.12);
+
+          float cR = layeredCaustics(refractedXZ + vec2(0.05, 0.03), uTime);
+          float cG = layeredCaustics(refractedXZ, uTime);
+          float cB = layeredCaustics(refractedXZ - vec2(0.05, 0.03), uTime);
+          vec3 causticCol = vec3(cR * 0.42, cG * 0.88, cB * 1.05);
+
+          float causticMask = (0.28 + 0.72 * centerGlow) * uCausticsIntensity;
+          bg += causticCol * 0.26 * causticMask;
+
+          bg += vec3(0.18, 0.48, 0.58) * rip * 0.20 * uCausticsIntensity;
+
+          float vig = smoothstep(1.65, 0.55, radialDist);
+          bg *= mix(0.62, 1.0, vig);
+
+          gl_FragColor = vec4(bg, 1.0);
+        }
+      `
+    });
+
+    const pondBottom = new THREE.Mesh(new THREE.PlaneGeometry(90, 56), pondBottomMat);
+    pondBottom.rotation.x = -Math.PI / 2;
+    pondBottom.position.y = -3.4;
+    scene.add(pondBottom);
+
+    // 3.2 Plano de Água Superior com Cáusticas de Superfície e Ripples (y = 1.8)
+    const waterSurfaceUniforms = {
+      uTime: { value: 0 },
+      uCausticsIntensity: { value: params.causticsIntensity },
+      uHalfSize: { value: new THREE.Vector2(worldBounds.halfW, worldBounds.halfH) },
+      uRipples: { value: rippleData }
+    };
+
+    const waterSurfaceMat = new THREE.ShaderMaterial({
+      uniforms: waterSurfaceUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: /* glsl */ `
+        varying vec2 vWorldXZ;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldXZ = wp.xz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uCausticsIntensity;
+        uniform vec2 uHalfSize;
+        uniform vec4 uRipples[22];
+        varying vec2 vWorldXZ;
+
+        ${CAUSTICS_GLSL}
+
+        void main() {
+          vec2 normPos = vWorldXZ / max(uHalfSize, vec2(1.0));
+          float radialDist = length(normPos * vec2(0.9, 1.0));
+          float centerMask = 0.22 + 0.78 * exp(-radialDist * radialDist * 1.3);
+
+          float c = layeredCaustics(vWorldXZ * 1.12 + vec2(2.3, -1.9), uTime * 1.12);
+          float shimmer = pow(c, 1.35) * 0.20 * uCausticsIntensity * centerMask;
+
+          float rip = rippleField(vWorldXZ, uTime, uRipples);
+          float ripGlow = rip * 0.30;
+
+          vec3 col = vec3(0.42, 0.86, 0.96) * shimmer + vec3(0.58, 0.93, 1.0) * ripGlow;
+          float alpha = clamp(shimmer * 1.15 + ripGlow, 0.0, 0.68);
+
+          gl_FragColor = vec4(col, alpha);
+        }
+      `
+    });
+
+    const waterSurface = new THREE.Mesh(new THREE.PlaneGeometry(90, 56), waterSurfaceMat);
+    waterSurface.rotation.x = -Math.PI / 2;
+    waterSurface.position.y = 1.8;
+    waterSurface.renderOrder = 15;
+    scene.add(waterSurface);
+
+    // 3.3 Partículas subaquáticas sutis em suspensão
+    const moteCount = 95;
+    const motePos = new Float32Array(moteCount * 3);
+    const moteSeed = new Float32Array(moteCount);
+    for (let i = 0; i < moteCount; i++) {
+      motePos[i * 3 + 0] = (Math.random() - 0.5) * 38;
+      motePos[i * 3 + 1] = -2.5 + Math.random() * 3.8;
+      motePos[i * 3 + 2] = (Math.random() - 0.5) * 24;
+      moteSeed[i] = Math.random() * 6.2831;
+    }
+    const moteGeo = new THREE.BufferGeometry();
+    moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+    moteGeo.setAttribute('aSeed', new THREE.BufferAttribute(moteSeed, 1));
+
+    const moteUniforms = { uTime: { value: 0 }, uPixelRatio: { value: renderer.getPixelRatio() } };
+    const moteMat = new THREE.ShaderMaterial({
+      uniforms: moteUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: /* glsl */ `
+        attribute float aSeed;
+        uniform float uTime;
+        uniform float uPixelRatio;
+        varying float vAlpha;
+        void main() {
+          vec3 p = position;
+          p.x += sin(uTime * 0.25 + aSeed) * 0.45;
+          p.z += cos(uTime * 0.21 + aSeed * 1.3) * 0.45;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          gl_PointSize = (2.2 + 1.4 * sin(uTime * 0.8 + aSeed)) * uPixelRatio;
+          vAlpha = 0.08 + 0.09 * (0.5 + 0.5 * sin(uTime * 0.7 + aSeed * 2.0));
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        varying float vAlpha;
+        void main() {
+          float d = length(gl_PointCoord - 0.5);
+          float soft = smoothstep(0.5, 0.05, d);
+          gl_FragColor = vec4(0.55, 0.90, 0.98, soft * vAlpha);
+        }
+      `
+    });
+    scene.add(new THREE.Points(moteGeo, moteMat));
+
+    // =========================================================================
+    // 4. GEOMETRIAS PROCEDURAIS COMPARTILHADAS DA CARPA KOI
+    // =========================================================================
+    const HEAD_Z = 2.05;
+    const BODY_LEN = 4.10;
+
+    function koiBodyWidth(t) {
+      if (t < 0.27) {
+        const u = t / 0.27;
+        return 0.04 + 0.56 * Math.pow(Math.sin(u * Math.PI * 0.5), 0.78);
+      }
+      const u = (t - 0.27) / 0.73;
+      return 0.60 * Math.pow(1.0 - u, 1.42) + 0.075 * Math.pow(u, 0.6);
+    }
+
+    function koiBodyHeight(t) {
+      if (t < 0.30) {
+        const u = t / 0.30;
+        return 0.05 + 0.44 * Math.pow(Math.sin(u * Math.PI * 0.5), 0.75);
+      }
+      const u = (t - 0.30) / 0.70;
+      return 0.49 * Math.pow(1.0 - u, 1.28) + 0.08;
+    }
+
+    function createKoiBodyGeometry() {
+      const lengthSegs = 60;
+      const radialSegs = 26;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      for (let i = 0; i <= lengthSegs; i++) {
+        const t = i / lengthSegs;
+        const z = HEAD_Z - t * BODY_LEN;
+        const rx = koiBodyWidth(t);
+        const ry = koiBodyHeight(t);
+        const yOffset = Math.sin(t * Math.PI) * 0.05;
+
+        for (let j = 0; j <= radialSegs; j++) {
+          const v = j / radialSegs;
+          const theta = v * Math.PI * 2.0;
+          const cosT = Math.cos(theta);
+          const sinT = Math.sin(theta);
+
+          const yScale = sinT >= 0 ? 1.05 : 0.78;
+          positions.push(cosT * rx, sinT * ry * yScale + yOffset, z);
+          uvs.push(t, v);
+        }
+      }
+
+      const stride = radialSegs + 1;
+      for (let i = 0; i < lengthSegs; i++) {
+        for (let j = 0; j < radialSegs; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    function createCaudalFinGeometry(tailLength = 1.82, spreadScale = 1.0) {
+      const segU = 24;
+      const segV = 20;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      const baseZ = -1.96;
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const side = (v - 0.5) * 2.0;
+          const absSide = Math.abs(side);
+
+          const spread = (0.08 + Math.pow(u, 0.78) * 1.08) * spreadScale;
+          const forkNotch = 0.42 * (1.0 - Math.pow(absSide, 1.45)) * Math.pow(u, 1.35);
+          const outerRound = 0.16 * Math.pow(absSide, 2.6) * u;
+
+          const z = baseZ - (u * tailLength) + forkNotch + outerRound;
+          const x = side * spread;
+          const y = 0.02 + Math.sin(u * Math.PI) * 0.06 * (1.0 - absSide * 0.5) - absSide * u * 0.05;
+
+          positions.push(x, y, z);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, d, b);
+          indices.push(b, d, c);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    function createPectoralFinGeometry(sideSign) {
+      const segU = 14;
+      const segV = 10;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const chord = Math.sin(Math.pow(u, 0.72) * Math.PI) * 0.88 + 0.16 * (1.0 - u);
+        const reach = u * 1.18;
+        const sweepBack = Math.pow(u, 1.25) * 0.68;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const localX = sideSign * reach;
+          const localZ = (0.35 - v) * chord - sweepBack;
+          const localY = -0.06 - u * 0.12 + Math.sin(v * Math.PI) * 0.045 * u;
+          positions.push(localX, localY, localZ);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          if (sideSign > 0) {
+            indices.push(a, d, b);
+            indices.push(b, d, c);
+          } else {
+            indices.push(a, b, d);
+            indices.push(b, c, d);
+          }
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    function createPelvicFinGeometry(sideSign) {
+      const segU = 9;
+      const segV = 7;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const chord = Math.sin(Math.pow(u, 0.75) * Math.PI) * 0.48 + 0.1 * (1.0 - u);
+        const reach = u * 0.56;
+        const sweepBack = Math.pow(u, 1.15) * 0.42;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          positions.push(sideSign * reach, -0.18 - u * 0.08, (0.28 - v) * chord - sweepBack);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          if (sideSign > 0) {
+            indices.push(a, d, b);
+            indices.push(b, d, c);
+          } else {
+            indices.push(a, b, d);
+            indices.push(b, c, d);
+          }
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    function createDorsalFinGeometry() {
+      const segU = 22;
+      const segV = 7;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      const startZ = 0.55;
+      const endZ = -1.15;
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const z = THREE.MathUtils.lerp(startZ, endZ, u);
+        const tBody = (HEAD_Z - z) / BODY_LEN;
+        const baseY = koiBodyHeight(tBody) * 0.95;
+        const finHeight = Math.sin(Math.pow(u, 0.78) * Math.PI) * 0.42 + 0.06 * (1.0 - u);
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          positions.push(0, baseY + v * finHeight, z - v * 0.22);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    function createWhiskerGeo(sideSign) {
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(sideSign * 0.14, -0.02, 1.92),
+        new THREE.Vector3(sideSign * 0.28, -0.04, 1.88),
+        new THREE.Vector3(sideSign * 0.36, -0.06, 1.72)
+      ]);
+      return new THREE.TubeGeometry(curve, 8, 0.014, 5, false);
+    }
+
+    // Geometrias compartilhadas (instanciadas em memória apenas uma vez)
+    const sharedGeos = {
+      body: createKoiBodyGeometry(),
+      caudalStandard: createCaudalFinGeometry(1.82, 1.0),
+      caudalVeil: createCaudalFinGeometry(2.22, 1.18), // Cauda véu mais longa para variedade elegante
+      pectL: createPectoralFinGeometry(1),
+      pectR: createPectoralFinGeometry(-1),
+      pelvL: createPelvicFinGeometry(1),
+      pelvR: createPelvicFinGeometry(-1),
+      dorsal: createDorsalFinGeometry(),
+      eyeL: new THREE.SphereGeometry(0.085, 12, 8).scale(0.85, 0.72, 1.05).translate(0.42, 0.17, 1.46),
+      eyeR: new THREE.SphereGeometry(0.085, 12, 8).scale(0.85, 0.72, 1.05).translate(-0.42, 0.17, 1.46),
+      whiskerL: createWhiskerGeo(1),
+      whiskerR: createWhiskerGeo(-1)
+    };
+
+    const pectLPivot = new THREE.Vector3(0.46, -0.05, 0.96);
+    const pectRPivot = new THREE.Vector3(-0.46, -0.05, 0.96);
+    const pelvLPivot = new THREE.Vector3(0.22, -0.14, -0.22);
+    const pelvRPivot = new THREE.Vector3(-0.22, -0.14, -0.22);
+
+    // =========================================================================
+    // 5. OS 5 MODELOS DE CARPA KOI (ESTÉTICA + PERSONALIDADE INDIVIDUAL)
+    // =========================================================================
+    const KOI_ARCHETYPES = [
+      {
+        name: 'Kohaku (Clássica Real)',
+        patternId: 0, // Branca perolada + grandes manchas laranja-vermelhão
+        seed: 1.7,
+        veilTail: false,
+        scale: 1.06,
+        widthRatio: 1.04,
+        depthY: 0.15,
+        finRootColor: 0xfcb484,
+        finTipColor: 0xf7fbff,
+        whiskerColor: 0xefe5d8,
+        // Personalidade: equilibrada, majestosa, medo moderado, boa curiosidade
+        speedFactor: 0.96,
+        burstRate: 0.95,
+        burstPower: 2.35,
+        fearRadius: 5.2,
+        fearBoost: 2.45,
+        fleeDuration: 1.15,
+        fleeDistanceBias: 1.0,
+        curiosity: 0.85,
+        curiosityOrbit: 2.6,
+        appetite: 1.05,
+        restTendency: 0.25
+      },
+      {
+        name: 'Taisho Sanke (Tricolor)',
+        patternId: 1, // Branca + laranja vibrante + manchas pretas Sumi
+        seed: 4.3,
+        veilTail: false,
+        scale: 0.96,
+        widthRatio: 0.98,
+        depthY: -0.05,
+        finRootColor: 0xf8b990,
+        finTipColor: 0xf2f7fc,
+        whiskerColor: 0xe8dfd3,
+        // Personalidade: ágil, curiosa, gosta de explorar e disputar petiscos
+        speedFactor: 1.12,
+        burstRate: 1.25,
+        burstPower: 2.55,
+        fearRadius: 5.6,
+        fearBoost: 2.65,
+        fleeDuration: 1.05,
+        fleeDistanceBias: 1.15,
+        curiosity: 1.18,
+        curiosityOrbit: 2.0,
+        appetite: 1.28,
+        restTendency: 0.12
+      },
+      {
+        name: 'Showa Sanshoku (Negra & Carmesim)',
+        patternId: 2, // Base preta aveludada com faixas brancas e vermelho-fogo
+        seed: 8.9,
+        veilTail: false,
+        scale: 1.16,
+        widthRatio: 1.10,
+        depthY: -0.32,
+        finRootColor: 0x3b3e48,
+        finTipColor: 0xe6ecf5,
+        whiskerColor: 0x3a3d46,
+        // Personalidade: grande, tranquila, corajosa (pouco medo, foge só se chegar muito perto e não vai longe)
+        speedFactor: 0.78,
+        burstRate: 0.60,
+        burstPower: 2.05,
+        fearRadius: 3.5,
+        fearBoost: 1.90,
+        fleeDuration: 0.72,
+        fleeDistanceBias: 0.65,
+        curiosity: 0.95,
+        curiosityOrbit: 1.85,
+        appetite: 0.92,
+        restTendency: 0.55
+      },
+      {
+        name: 'Yamabuki Ogon (Ouro Puro)',
+        patternId: 3, // Dourado metálico luminoso com escamas cintilantes e cauda véu
+        seed: 12.4,
+        veilTail: true,
+        scale: 0.88,
+        widthRatio: 0.92,
+        depthY: 0.34,
+        finRootColor: 0xffc84a,
+        finTipColor: 0xfff3c4,
+        whiskerColor: 0xffd56e,
+        // Personalidade: muito inquieta, rápida e arisca (se assusta de longe e dispara para bem longe!)
+        speedFactor: 1.28,
+        burstRate: 1.65,
+        burstPower: 2.85,
+        fearRadius: 7.2,
+        fearBoost: 3.25,
+        fleeDuration: 1.65,
+        fleeDistanceBias: 1.55,
+        curiosity: 0.62,
+        curiosityOrbit: 3.4,
+        appetite: 1.35,
+        restTendency: 0.05
+      },
+      {
+        name: 'Asagi Shusui (Azul-Prata & Coral)',
+        patternId: 4, // Dorso azul-ardósia prateado reticulado + laterais coral + cauda véu
+        seed: 19.2,
+        veilTail: true,
+        scale: 0.84,
+        widthRatio: 0.94,
+        depthY: -0.18,
+        finRootColor: 0xff8a65,
+        finTipColor: 0xdff2ff,
+        whiskerColor: 0xd9e8f2,
+        // Personalidade: tímida ao movimento mas super curiosa quando o mouse para, adora petiscos
+        speedFactor: 0.90,
+        burstRate: 0.82,
+        burstPower: 2.40,
+        fearRadius: 6.2,
+        fearBoost: 2.85,
+        fleeDuration: 1.35,
+        fleeDistanceBias: 1.25,
+        curiosity: 1.35,
+        curiosityOrbit: 1.65,
+        appetite: 1.18,
+        restTendency: 0.38
+      }
+    ];
+
+    // =========================================================================
+    // 6. SHADERS DAS CARPAS (5 PADRÕES PROCEDURAIS + DEFORMAÇÃO FÍSICA)
+    // =========================================================================
+    const globalFishUniforms = {
+      uTime: { value: 0 },
+      uCausticsIntensity: { value: params.causticsIntensity }
+    };
+
+    const FISH_DEFORM_GLSL = /* glsl */ `
+      uniform float uSwimPhase;
+      uniform float uTailAmp;
+      uniform float uSpineCurve;
+
+      float spineOffsetX(float z) {
+        float s = clamp((2.05 - z) / 6.20, 0.0, 1.0);
+        float wave = sin(uSwimPhase - s * 5.7);
+        float amp = uTailAmp * (0.03 + 0.97 * pow(s, 1.75));
+        float swimX = wave * amp;
+
+        float ds = s - 0.27;
+        float bendX = uSpineCurve * (ds * ds) * 2.85;
+
+        return swimX + bendX;
+      }
+
+      vec3 deformFishPosition(vec3 p) {
+        p.x += spineOffsetX(p.z);
+        return p;
+      }
+
+      vec3 deformFishNormal(vec3 p, vec3 n) {
+        float eps = 0.06;
+        float dx = spineOffsetX(p.z + eps) - spineOffsetX(p.z - eps);
+        float angle = atan(dx / (2.0 * eps));
+        float c = cos(angle);
+        float s = sin(angle);
+        return normalize(vec3(n.x * c + n.z * s, n.y, -n.x * s + n.z * c));
+      }
+    `;
+
+    function createKoiBodyMaterial(fishUniforms, archetype) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...globalFishUniforms,
+          ...fishUniforms,
+          uPatternId: { value: archetype.patternId },
+          uSeed: { value: archetype.seed }
+        },
+        vertexShader: /* glsl */ `
+          varying vec3 vObjPos;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${FISH_DEFORM_GLSL}
+
+          void main() {
+            vObjPos = position;
+            vec3 deformedPos = deformFishPosition(position);
+            vec3 deformedNorm = deformFishNormal(position, normal);
+
+            vec4 wp = modelMatrix * vec4(deformedPos, 1.0);
+            vWorldPos = wp.xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * deformedNorm);
+
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uTime;
+          uniform float uCausticsIntensity;
+          uniform int uPatternId;
+          uniform float uSeed;
+          varying vec3 vObjPos;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${CAUSTICS_GLSL}
+
+          float hash21(vec2 p) {
+            p = fract(p * vec2(123.34, 456.21));
+            p += dot(p, p + 45.32);
+            return fract(p.x * p.y);
+          }
+
+          float noise2D(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            float a = hash21(i);
+            float b = hash21(i + vec2(1.0, 0.0));
+            float c = hash21(i + vec2(0.0, 1.0));
+            float d = hash21(i + vec2(1.0, 1.0));
+            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+          }
+
+          float fbm(vec2 p) {
+            float v = 0.0;
+            float a = 0.52;
+            mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
+            for (int i = 0; i < 4; i++) {
+              v += a * noise2D(p);
+              p = rot * p * 2.05;
+              a *= 0.5;
+            }
+            return v;
+          }
+
+          void main() {
+            vec3 N = normalize(vWorldNormal);
+            vec3 V = normalize(cameraPosition - vWorldPos);
+            vec3 L = normalize(vec3(-0.35, 1.0, -0.28));
+
+            vec2 p = vec2(vObjPos.x * 1.45, vObjPos.z * 0.92);
+            vec2 warp = vec2(fbm(p * 1.45 + uSeed), fbm(p * 1.45 + uSeed + 4.3)) - 0.5;
+            vec2 wp = p + warp * 0.60;
+
+            // Escamas procedurais
+            vec2 scaleUv = vec2(vObjPos.z * 9.5, atan(vObjPos.y, vObjPos.x) * 4.2);
+            scaleUv.y += floor(scaleUv.x) * 0.5;
+            float scaleCell = length(fract(scaleUv) - 0.5);
+            float scaleRim = smoothstep(0.48, 0.34, scaleCell);
+            float scaleShade = mix(0.93, 1.04, scaleRim);
+
+            vec3 albedo = vec3(0.95);
+            float metallicBoost = 0.0;
+
+            if (uPatternId == 0) {
+              // 0: KOHAKU (Branco perolado + grandes manchas vermelho-alaranjado vibrantes)
+              float p1 = 1.0 - smoothstep(0.30, 0.54, length((wp - vec2(0.02, 1.32)) * vec2(1.15, 0.95)));
+              float p2 = 1.0 - smoothstep(0.54, 0.82, length((wp - vec2(-0.08, 0.16)) * vec2(0.88, 0.68)));
+              float p3 = 1.0 - smoothstep(0.42, 0.66, length((wp - vec2(0.10, -1.08)) * vec2(1.05, 0.82)));
+              float orangeMask = smoothstep(0.28, 0.43, max(p1, max(p2, p3)));
+              vec3 pearl = vec3(0.97, 0.955, 0.925);
+              vec3 hi = mix(vec3(0.95, 0.18, 0.03), vec3(1.0, 0.42, 0.06), fbm(wp * 2.5 + uSeed));
+              albedo = mix(pearl, hi, orangeMask) * scaleShade;
+            } else if (uPatternId == 1) {
+              // 1: TAISHO SANKE (Branco perolado + laranja vibrante + pintas pretas Sumi)
+              float p1 = 1.0 - smoothstep(0.28, 0.50, length((wp - vec2(0.08, 1.15)) * vec2(1.15, 0.95)));
+              float p2 = 1.0 - smoothstep(0.48, 0.74, length((wp - vec2(-0.18, 0.08)) * vec2(0.95, 0.74)));
+              float p3 = 1.0 - smoothstep(0.34, 0.58, length((wp - vec2(0.14, -1.02)) * vec2(1.1, 0.84)));
+              float orangeMask = smoothstep(0.28, 0.44, max(p1, max(p2, p3)));
+
+              float s1 = 1.0 - smoothstep(0.18, 0.32, length((wp - vec2(0.28, 0.58)) * vec2(1.25, 1.0)));
+              float s2 = 1.0 - smoothstep(0.20, 0.35, length((wp - vec2(-0.22, -0.56)) * vec2(1.2, 0.95)));
+              float s3 = 1.0 - smoothstep(0.14, 0.25, length((wp - vec2(0.06, -1.42)) * vec2(1.35, 1.0)));
+              float blackMask = smoothstep(0.32, 0.48, max(s1, max(s2, s3)));
+
+              vec3 pearl = vec3(0.96, 0.945, 0.91);
+              vec3 hi = mix(vec3(0.97, 0.28, 0.04), vec3(1.0, 0.50, 0.09), fbm(wp * 2.8));
+              vec3 sumi = vec3(0.07, 0.08, 0.105);
+              albedo = mix(pearl, hi, orangeMask);
+              albedo = mix(albedo, sumi, blackMask);
+              albedo *= scaleShade;
+            } else if (uPatternId == 2) {
+              // 2: SHOWA SANSHOKU (Base preta profunda + faixas brancas + manchas carmesim)
+              float whiteBand1 = 1.0 - smoothstep(0.34, 0.56, length((wp - vec2(0.05, 0.85)) * vec2(0.82, 1.18)));
+              float whiteBand2 = 1.0 - smoothstep(0.36, 0.58, length((wp - vec2(-0.10, -0.78)) * vec2(0.85, 1.08)));
+              float whiteMask = smoothstep(0.30, 0.46, max(whiteBand1, whiteBand2));
+
+              float red1 = 1.0 - smoothstep(0.34, 0.58, length((wp - vec2(-0.08, 1.25)) * vec2(1.05, 0.90)));
+              float red2 = 1.0 - smoothstep(0.42, 0.68, length((wp - vec2(0.12, -0.05)) * vec2(0.92, 0.78)));
+              float red3 = 1.0 - smoothstep(0.28, 0.48, length((wp - vec2(-0.08, -1.32)) * vec2(1.15, 0.90)));
+              float redMask = smoothstep(0.30, 0.46, max(red1, max(red2, red3)));
+
+              vec3 sumiBase = vec3(0.08, 0.095, 0.125);
+              vec3 snow = vec3(0.95, 0.95, 0.94);
+              vec3 crimson = mix(vec3(0.88, 0.12, 0.04), vec3(0.98, 0.30, 0.06), fbm(wp * 2.6));
+              albedo = mix(sumiBase, snow, whiteMask);
+              albedo = mix(albedo, crimson, redMask);
+              albedo *= mix(0.94, 1.05, scaleRim);
+            } else if (uPatternId == 3) {
+              // 3: YAMABUKI OGON (Ouro metálico luminoso com escamas cintilantes)
+              float goldVar = fbm(wp * 2.2 + uSeed);
+              vec3 deepGold = vec3(0.94, 0.60, 0.06);
+              vec3 brightGold = vec3(1.0, 0.86, 0.30);
+              vec3 headSheen = vec3(1.0, 0.92, 0.55);
+              albedo = mix(deepGold, brightGold, goldVar);
+              float headMask = smoothstep(0.85, 1.65, vObjPos.z);
+              albedo = mix(albedo, headSheen, headMask * 0.45);
+              // Escamas douradas mais marcadas
+              albedo *= mix(0.87, 1.12, scaleRim);
+              metallicBoost = 0.42;
+            } else {
+              // 4: ASAGI / SHUSUI (Dorso azul-ardósia prateado reticulado + laterais coral)
+              float dorsalBand = 1.0 - smoothstep(0.18, 0.48, abs(vObjPos.x + warp.x * 0.12));
+              float headWhite = smoothstep(0.95, 1.55, vObjPos.z);
+              vec3 slateBlue = mix(vec3(0.18, 0.36, 0.54), vec3(0.45, 0.66, 0.82), scaleRim);
+              vec3 silverSide = vec3(0.88, 0.93, 0.96);
+              vec3 coral = vec3(0.98, 0.40, 0.24);
+
+              float coralFlank = smoothstep(0.14, 0.38, abs(vObjPos.x)) * smoothstep(1.25, 0.35, vObjPos.z) * smoothstep(-1.8, -0.4, vObjPos.z);
+              albedo = mix(silverSide, slateBlue, dorsalBand * (1.0 - headWhite * 0.92));
+              albedo = mix(albedo, coral, coralFlank * 0.78);
+              albedo *= mix(0.90, 1.07, scaleRim);
+              metallicBoost = 0.22;
+            }
+
+            float bellyFade = smoothstep(-0.35, 0.35, N.y);
+            albedo *= mix(0.66, 1.0, bellyFade);
+
+            float diff = max(dot(N, L), 0.0);
+            vec3 hemi = mix(vec3(0.04, 0.18, 0.26), vec3(0.75, 0.92, 0.98), N.y * 0.5 + 0.5);
+            vec3 lighting = hemi * 0.48 + vec3(1.0, 0.97, 0.90) * diff * 0.78;
+
+            vec3 H = normalize(L + V);
+            float spec = pow(max(dot(N, H), 0.0), 38.0) * (0.36 + metallicBoost * 0.45);
+            float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0) * (0.22 + metallicBoost * 0.25);
+
+            vec3 specTint = mix(vec3(0.86, 0.96, 1.0), vec3(1.0, 0.93, 0.68), metallicBoost);
+            vec3 color = albedo * lighting + specTint * (spec + fresnel * 0.65);
+
+            float c = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
+            color += vec3(0.35, 0.82, 0.95) * c * 0.22 * uCausticsIntensity * max(N.y, 0.0);
+
+            // Leve absorção de água proporcional à profundidade do peixe
+            float depthTint = clamp(0.10 - vWorldPos.y * 0.06, 0.06, 0.20);
+            color = mix(color, vec3(0.05, 0.26, 0.34), depthTint);
+
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `
+      });
+    }
+
+    function createFinMaterial(fishUniforms, finType, sideSign, rootHex, tipHex) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...globalFishUniforms,
+          ...fishUniforms,
+          uFinType: { value: finType },
+          uSideSign: { value: sideSign },
+          uPivot: { value: new THREE.Vector3(0, 0, 0) },
+          uRootColor: { value: new THREE.Color(rootHex) },
+          uTipColor: { value: new THREE.Color(tipHex) }
+        },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        vertexShader: /* glsl */ `
+          uniform int uFinType;
+          uniform float uSideSign;
+          uniform vec3 uPivot;
+          uniform float uPectoralSpread;
+          uniform float uPectoralRowL;
+          uniform float uPectoralRowR;
+          uniform float uTime;
+
+          varying vec2 vUv;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${FISH_DEFORM_GLSL}
+
+          void main() {
+            vUv = uv;
+            vec3 p = position;
+            vec3 n = normal;
+
+            if (uFinType == 1) {
+              float row = (uSideSign > 0.0) ? uPectoralRowL : uPectoralRowR;
+              float angle = uSideSign * (uPectoralSpread + row);
+              float tipLag = sin(uTime * 3.8 + uSideSign) * 0.05 * uv.x;
+              float c = cos(angle);
+              float s = sin(angle);
+              p = uPivot + vec3(p.x * c - p.z * s, p.y + tipLag, p.x * s + p.z * c);
+            } else if (uFinType == 2) {
+              float angle = uSideSign * (uPectoralSpread * 0.45);
+              float c = cos(angle);
+              float s = sin(angle);
+              p = uPivot + vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
+            } else if (uFinType == 3) {
+              float sBody = clamp((2.05 - p.z) / 6.20, 0.0, 1.0);
+              float dorsalWave = sin(uSwimPhase - sBody * 5.7 - uv.y * 1.15) * (uTailAmp * 0.32 + 0.06) * uv.y;
+              p.x += dorsalWave;
+            } else if (uFinType == 0) {
+              float whip = sin(uSwimPhase - 5.2 - uv.x * 2.15) * (uTailAmp * 0.25) * pow(uv.x, 1.5);
+              p.x += whip;
+            }
+
+            vec3 deformedPos = deformFishPosition(p);
+            vec3 deformedNorm = deformFishNormal(p, n);
+
+            vec4 wp = modelMatrix * vec4(deformedPos, 1.0);
+            vWorldPos = wp.xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * deformedNorm);
+
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform int uFinType;
+          uniform float uTime;
+          uniform float uCausticsIntensity;
+          uniform vec3 uRootColor;
+          uniform vec3 uTipColor;
+          varying vec2 vUv;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${CAUSTICS_GLSL}
+
+          void main() {
+            float rayCoord = (uFinType == 3) ? vUv.x * 26.0 : vUv.y * 28.0;
+            float rays = pow(0.5 + 0.5 * sin(rayCoord * 3.14159), 1.8);
+
+            float t = (uFinType == 3) ? vUv.y : vUv.x;
+            vec3 col = mix(uRootColor, uTipColor, smoothstep(0.0, 0.58, t));
+            col *= (0.86 + 0.16 * rays);
+
+            vec3 N = normalize(vWorldNormal);
+            col *= (0.68 + 0.32 * abs(N.y));
+
+            float c = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
+            col += vec3(0.35, 0.85, 0.98) * c * 0.16 * uCausticsIntensity;
+
+            float alpha = mix(0.76, 0.20, smoothstep(0.12, 1.0, t));
+            float edgeSoft = (uFinType == 3)
+              ? smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x) * smoothstep(1.0, 0.84, vUv.y)
+              : smoothstep(0.0, 0.07, vUv.y) * smoothstep(1.0, 0.93, vUv.y) * smoothstep(1.0, 0.86, vUv.x);
+
+            alpha *= (0.72 + 0.28 * rays) * edgeSoft;
+            gl_FragColor = vec4(col, alpha);
+          }
+        `
+      });
+    }
+
+    function createDetailMaterial(fishUniforms, baseColor) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...fishUniforms,
+          uColor: { value: new THREE.Color(baseColor) }
+        },
+        vertexShader: /* glsl */ `
+          varying vec3 vWorldNormal;
+          varying vec3 vWorldPos;
+          ${FISH_DEFORM_GLSL}
+          void main() {
+            vec3 p = deformFishPosition(position);
+            vec3 n = deformFishNormal(position, normal);
+            vec4 wp = modelMatrix * vec4(p, 1.0);
+            vWorldPos = wp.xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * n);
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform vec3 uColor;
+          varying vec3 vWorldNormal;
+          varying vec3 vWorldPos;
+          void main() {
+            vec3 N = normalize(vWorldNormal);
+            vec3 V = normalize(cameraPosition - vWorldPos);
+            vec3 L = normalize(vec3(-0.35, 1.0, -0.28));
+            float diff = 0.4 + 0.6 * max(dot(N, L), 0.0);
+            float spec = pow(max(dot(N, normalize(L + V)), 0.0), 64.0) * 0.85;
+            gl_FragColor = vec4(uColor * diff + vec3(spec), 1.0);
+          }
+        `
+      });
+    }
+
+    function createShadowMaterial(fishUniforms, finType = -1, sideSign = 0, pivot = new THREE.Vector3()) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...globalFishUniforms,
+          ...fishUniforms,
+          uFinType: { value: finType },
+          uSideSign: { value: sideSign },
+          uPivot: { value: pivot },
+          uOpacity: { value: finType === -1 ? 0.34 : 0.14 }
+        },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        vertexShader: /* glsl */ `
+          uniform int uFinType;
+          uniform float uSideSign;
+          uniform vec3 uPivot;
+          uniform float uPectoralSpread;
+          uniform float uPectoralRowL;
+          uniform float uPectoralRowR;
+          uniform float uTime;
+          varying vec2 vUv;
+
+          ${FISH_DEFORM_GLSL}
+
+          void main() {
+            vUv = uv;
+            vec3 p = position;
+
+            if (uFinType == 1) {
+              float row = (uSideSign > 0.0) ? uPectoralRowL : uPectoralRowR;
+              float angle = uSideSign * (uPectoralSpread + row);
+              float c = cos(angle);
+              float s = sin(angle);
+              p = uPivot + vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
+            } else if (uFinType == 0) {
+              float whip = sin(uSwimPhase - 5.2 - uv.x * 2.15) * (uTailAmp * 0.25) * pow(uv.x, 1.5);
+              p.x += whip;
+            }
+
+            p = deformFishPosition(p);
+            p.y = 0.0;
+            p.x *= 1.10;
+            p.z *= 1.05;
+            p.x += sin(p.z * 1.4 + uTime * 1.6) * 0.04;
+
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uOpacity;
+          uniform int uFinType;
+          varying vec2 vUv;
+          void main() {
+            float soft = 1.0;
+            if (uFinType >= 0) {
+              soft = smoothstep(1.0, 0.15, vUv.x) * smoothstep(0.0, 0.12, vUv.y) * smoothstep(1.0, 0.88, vUv.y);
+            }
+            gl_FragColor = vec4(0.004, 0.024, 0.055, uOpacity * soft);
+          }
+        `
+      });
+    }
+
+    // =========================================================================
+    // 7. FÁBRICA DE CARPAS (INSTANCIA OS 5 MODELOS + SOMBRAS)
+    // =========================================================================
+    const fishList = [];
+
+    function createKoiInstance(archetype, index) {
+      const fishUniforms = {
+        uSwimPhase: { value: Math.random() * Math.PI * 2 },
+        uTailAmp: { value: 0.26 },
+        uSpineCurve: { value: 0.0 },
+        uPectoralSpread: { value: 0.35 },
+        uPectoralRowL: { value: 0.0 },
+        uPectoralRowR: { value: 0.0 }
+      };
+
+      const group = new THREE.Group();
+      scene.add(group);
+
+      const caudalGeo = archetype.veilTail ? sharedGeos.caudalVeil : sharedGeos.caudalStandard;
+
+      const bodyMesh = new THREE.Mesh(sharedGeos.body, createKoiBodyMaterial(fishUniforms, archetype));
+      bodyMesh.renderOrder = 3 + index * 0.1;
+      group.add(bodyMesh);
+
+      const caudalMesh = new THREE.Mesh(
+        caudalGeo,
+        createFinMaterial(fishUniforms, 0, 0, archetype.finRootColor, archetype.finTipColor)
+      );
+      caudalMesh.renderOrder = 4;
+      group.add(caudalMesh);
+
+      const pectLMat = createFinMaterial(fishUniforms, 1, 1, archetype.finTipColor, archetype.finTipColor);
+      pectLMat.uniforms.uPivot.value.copy(pectLPivot);
+      const pectLMesh = new THREE.Mesh(sharedGeos.pectL, pectLMat);
+      pectLMesh.renderOrder = 2;
+      group.add(pectLMesh);
+
+      const pectRMat = createFinMaterial(fishUniforms, 1, -1, archetype.finTipColor, archetype.finTipColor);
+      pectRMat.uniforms.uPivot.value.copy(pectRPivot);
+      const pectRMesh = new THREE.Mesh(sharedGeos.pectR, pectRMat);
+      pectRMesh.renderOrder = 2;
+      group.add(pectRMesh);
+
+      const pelvLMat = createFinMaterial(fishUniforms, 2, 1, archetype.finTipColor, archetype.finTipColor);
+      pelvLMat.uniforms.uPivot.value.copy(pelvLPivot);
+      const pelvLMesh = new THREE.Mesh(sharedGeos.pelvL, pelvLMat);
+      pelvLMesh.renderOrder = 2;
+      group.add(pelvLMesh);
+
+      const pelvRMat = createFinMaterial(fishUniforms, 2, -1, archetype.finTipColor, archetype.finTipColor);
+      pelvRMat.uniforms.uPivot.value.copy(pelvRPivot);
+      const pelvRMesh = new THREE.Mesh(sharedGeos.pelvR, pelvRMat);
+      pelvRMesh.renderOrder = 2;
+      group.add(pelvRMesh);
+
+      const dorsalMesh = new THREE.Mesh(
+        sharedGeos.dorsal,
+        createFinMaterial(fishUniforms, 3, 0, archetype.finRootColor, archetype.finTipColor)
+      );
+      dorsalMesh.renderOrder = 5;
+      group.add(dorsalMesh);
+
+      const eyeMat = createDetailMaterial(fishUniforms, 0x101318);
+      group.add(new THREE.Mesh(sharedGeos.eyeL, eyeMat));
+      group.add(new THREE.Mesh(sharedGeos.eyeR, eyeMat));
+
+      const whiskerMat = createDetailMaterial(fishUniforms, archetype.whiskerColor);
+      group.add(new THREE.Mesh(sharedGeos.whiskerL, whiskerMat));
+      group.add(new THREE.Mesh(sharedGeos.whiskerR, whiskerMat));
+
+      // Sombra sincronizada no fundo do lago
+      const shadowGroup = new THREE.Group();
+      scene.add(shadowGroup);
+
+      const shadowBody = new THREE.Mesh(sharedGeos.body, createShadowMaterial(fishUniforms, -1, 0));
+      shadowBody.renderOrder = 1;
+      shadowGroup.add(shadowBody);
+
+      const shadowCaudal = new THREE.Mesh(caudalGeo, createShadowMaterial(fishUniforms, 0, 0));
+      shadowCaudal.renderOrder = 1;
+      shadowGroup.add(shadowCaudal);
+
+      const shadowPectL = new THREE.Mesh(sharedGeos.pectL, createShadowMaterial(fishUniforms, 1, 1, pectLPivot));
+      shadowPectL.renderOrder = 1;
+      shadowGroup.add(shadowPectL);
+
+      const shadowPectR = new THREE.Mesh(sharedGeos.pectR, createShadowMaterial(fishUniforms, 1, -1, pectRPivot));
+      shadowPectR.renderOrder = 1;
+      shadowGroup.add(shadowPectR);
+
+      // Posição inicial bem distribuída pelo lago
+      const startAngle = (index / KOI_ARCHETYPES.length) * Math.PI * 2 + 0.4;
+      const startDist = 3.2 + (index % 2) * 2.4;
+
+      const fish = {
+        index,
+        archetype,
+        uniforms: fishUniforms,
+        group,
+        shadowGroup,
+        visible: true,
+
+        pos: new THREE.Vector2(Math.cos(startAngle) * startDist, Math.sin(startAngle) * startDist * 0.7),
+        heading: startAngle + Math.PI * 0.55,
+        speed: params.baseSpeed * archetype.speedFactor,
+        prevSpeed: params.baseSpeed * archetype.speedFactor,
+        acceleration: 0,
+        angularVelocity: 0,
+
+        // Estados: 'CRUISE' | 'REST' | 'BURST' | 'COAST' | 'FLEE' | 'SEEK_TREAT'
+        state: 'CRUISE',
+        stateTimer: 0,
+        burstDuration: 0.45,
+        fleeTimer: 0,
+        fleeHeadingOffset: (Math.random() - 0.5) * 0.65,
+        fleeCooldown: 0,
+        nextBurstIn: (2.2 + Math.random() * 4.2) / archetype.burstRate,
+        restDuration: 0,
+
+        // Steering
+        wanderAngle: Math.random() * Math.PI * 2,
+        curiosityOrbitSign: index % 2 === 0 ? 1 : -1,
+
+        // Acoplamento corpo-física
+        swimPhase: Math.random() * Math.PI * 2,
+        smoothEffort: 0.32,
+        smoothSpineCurve: 0,
+        smoothPectSpread: 0.36,
+        pectRowPhase: Math.random() * Math.PI * 2
+      };
+
+      fishList.push(fish);
+      return fish;
+    }
+
+    KOI_ARCHETYPES.forEach((arch, idx) => createKoiInstance(arch, idx));
+
+    function syncFishCount() {
+      fishList.forEach((f, idx) => {
+        const show = idx < params.fishCount;
+        f.visible = show;
+        f.group.visible = show;
+        f.shadowGroup.visible = show;
+      });
+    }
+
+    // =========================================================================
+    // 8. SISTEMA DE PETISCOS (CLIQUE NA ÁGUA ATRAI AS CARPAS)
+    // =========================================================================
+    const treats = [];
+    const MAX_TREATS = 12;
+
+    const treatGeo = new THREE.SphereGeometry(0.16, 12, 10);
+    const treatMat = new THREE.MeshStandardMaterial({
+      color: 0xc98a42,
+      roughness: 0.65,
+      metalness: 0.08,
+      emissive: 0x3b2208,
+      emissiveIntensity: 0.35
+    });
+    const treatRingGeo = new THREE.RingGeometry(0.19, 0.27, 20);
+    treatRingGeo.rotateX(-Math.PI / 2);
+    const treatRingMat = new THREE.MeshBasicMaterial({
+      color: 0x8be4f5,
+      transparent: true,
+      opacity: 0.38,
+      depthWrite: false
+    });
+
+    // Luz suave para iluminar os petiscos 3D na superfície
+    const hemiLight = new THREE.HemisphereLight(0xbef0ff, 0x0b3545, 1.4);
+    scene.add(hemiLight);
+    const dirLight = new THREE.DirectionalLight(0xfff5e4, 1.3);
+    dirLight.position.set(-6, 18, -5);
+    scene.add(dirLight);
+
+    // Pequenas bolhinhas quando uma carpa come o petisco
+    const biteParticles = [];
+    const bubbleGeo = new THREE.SphereGeometry(0.065, 8, 6);
+    const bubbleMat = new THREE.MeshBasicMaterial({
+      color: 0xbef5ff,
+      transparent: true,
+      opacity: 0.65,
+      depthWrite: false
+    });
+
+    function spawnBiteEffect(x, z) {
+      spawnRipple(x, z, 1.15);
+      for (let i = 0; i < 6; i++) {
+        const mesh = new THREE.Mesh(bubbleGeo, bubbleMat.clone());
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 0.6 + Math.random() * 1.1;
+        mesh.position.set(x, 0.6, z);
+        mesh.scale.setScalar(0.5 + Math.random() * 0.9);
+        mesh.renderOrder = 14;
+        scene.add(mesh);
+        biteParticles.push({
+          mesh,
+          vx: Math.cos(ang) * spd,
+          vz: Math.sin(ang) * spd,
+          life: 0,
+          maxLife: 0.55 + Math.random() * 0.35
+        });
+      }
+    }
+
+    function spawnTreat(x, z) {
+      // Remove o petisco mais antigo se exceder o limite
+      if (treats.length >= MAX_TREATS) {
+        const oldest = treats.shift();
+        scene.remove(oldest.group);
+      }
+
+      const group = new THREE.Group();
+      const pellet = new THREE.Mesh(treatGeo, treatMat);
+      pellet.scale.set(1.0, 0.72, 1.0);
+      group.add(pellet);
+
+      const ring = new THREE.Mesh(treatRingGeo, treatRingMat.clone());
+      ring.position.y = 0.02;
+      group.add(ring);
+
+      group.position.set(x, 0.85, z);
+      group.renderOrder = 12;
+      scene.add(group);
+
+      spawnRipple(x, z, 1.05);
+
+      treats.push({
+        group,
+        ring,
+        pos: new THREE.Vector2(x, z),
+        age: 0,
+        bobSeed: Math.random() * Math.PI * 2
+      });
+    }
+
+    function updateTreatsAndBites(dt) {
+      for (let i = treats.length - 1; i >= 0; i--) {
+        const t = treats[i];
+        t.age += dt;
+        // Flutuação suave na superfície da água
+        t.group.position.y = 0.82 + Math.sin(clockTime * 3.2 + t.bobSeed) * 0.06;
+        t.group.rotation.y += dt * 0.6;
+        const pulse = 1.0 + Math.sin(clockTime * 2.8 + t.bobSeed) * 0.16;
+        t.ring.scale.setScalar(pulse);
+        t.ring.material.opacity = 0.25 + 0.16 * Math.sin(clockTime * 2.8 + t.bobSeed);
+
+        // Expira suavemente após 35s caso ninguém coma
+        if (t.age > 35.0) {
+          scene.remove(t.group);
+          treats.splice(i, 1);
+        }
+      }
+
+      for (let i = biteParticles.length - 1; i >= 0; i--) {
+        const p = biteParticles[i];
+        p.life += dt;
+        p.mesh.position.x += p.vx * dt;
+        p.mesh.position.z += p.vz * dt;
+        p.mesh.position.y += dt * 1.1;
+        p.vx *= 0.94;
+        p.vz *= 0.94;
+        const remain = 1.0 - p.life / p.maxLife;
+        p.mesh.material.opacity = Math.max(0, remain * 0.65);
+        if (p.life >= p.maxLife) {
+          scene.remove(p.mesh);
+          p.mesh.material.dispose();
+          biteParticles.splice(i, 1);
+        }
+      }
+    }
+
+    // =========================================================================
+    // 9. RASTREAMENTO DO MOUSE (MOVIMENTO = FUGA | PARADO = CURIOSIDADE | CLIQUE = PETISCO)
+    // =========================================================================
+    const mouse = {
+      world: new THREE.Vector2(999, 999),
+      prevWorld: new THREE.Vector2(999, 999),
+      lastRipplePos: new THREE.Vector2(999, 999),
+      lastRippleTime: -10,
+      inside: false,
+      stillTime: 0,      // Tempo acumulado com o mouse parado dentro da tela
+      speed: 0,          // Velocidade instantânea do cursor no mundo
+      moving: false,     // True se o mouse se mexeu recentemente
+      moveCooldown: 0    // Mantém estado de movimento por breve instante
+    };
+
+    const raycaster = new THREE.Raycaster();
+    const pointerNdc = new THREE.Vector2();
+    const waterPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPoint = new THREE.Vector3();
+
+    function projectPointer(clientX, clientY) {
+      pointerNdc.x = (clientX / window.innerWidth) * 2 - 1;
+      pointerNdc.y = -(clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointerNdc, camera);
+      if (raycaster.ray.intersectPlane(waterPlane, hitPoint)) {
+        return { x: hitPoint.x, z: hitPoint.z };
+      }
+      return null;
+    }
+
+    window.addEventListener('pointermove', (e) => {
+      if (!params.interactiveMouse) return;
+      const pt = projectPointer(e.clientX, e.clientY);
+      if (!pt) return;
+
+      const dx = pt.x - mouse.world.x;
+      const dz = pt.z - mouse.world.y;
+      const movedDist = Math.hypot(dx, dz);
+
+      mouse.prevWorld.copy(mouse.world);
+      mouse.world.set(pt.x, pt.z);
+      mouse.inside = true;
+
+      // Só considera movimento real se passou de um micro-tremor de pixel
+      if (movedDist > 0.06 && movedDist < 12.0) {
+        mouse.speed = Math.min(30, movedDist * 35);
+        mouse.moving = true;
+        mouse.moveCooldown = 0.28;
+        mouse.stillTime = 0; // Quebra imediatamente a curiosidade -> fuga!
+
+        // Gera leve ondulação na água acompanhando o rastro do mouse
+        const distSinceRipple = Math.hypot(pt.x - mouse.lastRipplePos.x, pt.z - mouse.lastRipplePos.y);
+        const dtSinceRipple = clockTime - mouse.lastRippleTime;
+        if (distSinceRipple > 0.52 || dtSinceRipple > 0.085) {
+          const gentleStrength = THREE.MathUtils.clamp(0.18 + movedDist * 0.24, 0.20, 0.46);
+          spawnRipple(pt.x, pt.z, gentleStrength);
+          mouse.lastRipplePos.set(pt.x, pt.z);
+          mouse.lastRippleTime = clockTime;
+        }
+      } else if (movedDist >= 12.0) {
+        mouse.lastRipplePos.set(pt.x, pt.z);
+      }
+    });
+
+    window.addEventListener('pointerleave', () => {
+      mouse.inside = false;
+      mouse.stillTime = 0;
+      mouse.moving = false;
+    });
+
+    window.addEventListener('pointerdown', (e) => {
+      if (!params.interactiveMouse) return;
+      if (e.target.closest && e.target.closest('.lil-gui')) return;
+      const pt = projectPointer(e.clientX, e.clientY);
+      if (!pt) return;
+
+      mouse.world.set(pt.x, pt.z);
+      mouse.inside = true;
+      // Solta petisco na água na posição clicada!
+      spawnTreat(pt.x, pt.z);
+    });
+
+    function updateMouseState(dt) {
+      if (!params.interactiveMouse || !mouse.inside) {
+        mouse.stillTime = 0;
+        mouse.moving = false;
+        mouse.speed = 0;
+        return;
+      }
+
+      if (mouse.moveCooldown > 0) {
+        mouse.moveCooldown -= dt;
+        if (mouse.moveCooldown <= 0) {
+          mouse.moving = false;
+        }
+      } else {
+        mouse.stillTime += dt;
+      }
+      mouse.speed = THREE.MathUtils.lerp(mouse.speed, 0, Math.min(1, dt * 10));
+    }
+
+    // =========================================================================
+    // 10. FÍSICA INDIVIDUAL DE LOCOMOÇÃO (BURST-AND-COAST + PERSONALIDADES)
+    // =========================================================================
+    function normalizeAngle(a) {
+      while (a > Math.PI) a -= Math.PI * 2;
+      while (a < -Math.PI) a += Math.PI * 2;
+      return a;
+    }
+
+    function scheduleNextBurst(fish) {
+      const freq = Math.max(0.25, params.burstFrequency * fish.archetype.burstRate);
+      fish.nextBurstIn = (2.8 + Math.random() * 4.2) / freq;
+    }
+
+    function triggerFishBurst(fish, intensity = 1.0) {
+      fish.state = 'BURST';
+      fish.stateTimer = 0;
+      fish.burstDuration = (0.34 + Math.random() * 0.18) * (0.85 + intensity * 0.2);
+      fish.wanderAngle += (Math.random() - 0.5) * 1.15;
+
+      const tailDist = 2.4 * params.fishScale * fish.archetype.scale;
+      const tailX = fish.pos.x - Math.sin(fish.heading) * tailDist;
+      const tailZ = fish.pos.y - Math.cos(fish.heading) * tailDist;
+      spawnRipple(tailX, tailZ, 0.72 * intensity);
+      scheduleNextBurst(fish);
+    }
+
+    function triggerFishFlee(fish) {
+      fish.state = 'FLEE';
+      fish.stateTimer = 0;
+      fish.fleeTimer = fish.archetype.fleeDuration * (0.85 + Math.random() * 0.35);
+      // Cada carpa foge com um ligeiro ângulo próprio para não parecerem robóticas
+      fish.fleeHeadingOffset = (Math.random() - 0.5) * 0.85;
+      fish.fleeCooldown = 0.45;
+
+      const tailDist = 2.4 * params.fishScale * fish.archetype.scale;
+      const tailX = fish.pos.x - Math.sin(fish.heading) * tailDist;
+      const tailZ = fish.pos.y - Math.cos(fish.heading) * tailDist;
+      spawnRipple(tailX, tailZ, 1.05);
+    }
+
+    function updateSingleFish(fish, dt) {
+      if (!fish.visible) return;
+
+      const arch = fish.archetype;
+      fish.stateTimer += dt;
+      if (fish.fleeCooldown > 0) fish.fleeCooldown -= dt;
+
+      const cruiseSpeed = params.baseSpeed * arch.speedFactor;
+      const burstPeakSpeed = cruiseSpeed * arch.burstPower;
+
+      // 1. Checa ameaça do mouse em movimento (FUGA INDIVIDUAL)
+      let distToMouse = 999;
+      if (params.interactiveMouse && mouse.inside) {
+        distToMouse = fish.pos.distanceTo(mouse.world);
+        if (mouse.moving && distToMouse < arch.fearRadius && fish.fleeCooldown <= 0) {
+          // Carpas mais medrosas fogem instantaneamente; mais corajosas só fogem se realmente perto ou movimento brusco
+          const triggerDist = arch.fearRadius * (mouse.speed > 4.0 ? 1.0 : 0.78);
+          if (distToMouse < triggerDist) {
+            triggerFishFlee(fish);
+          }
+        }
+      }
+
+      // 2. Procura o petisco mais próximo na água (se não estiver fugindo)
+      let nearestTreat = null;
+      let nearestTreatDist = 999;
+      if (fish.state !== 'FLEE' && treats.length > 0) {
+        for (let i = 0; i < treats.length; i++) {
+          const d = fish.pos.distanceTo(treats[i].pos);
+          if (d < nearestTreatDist) {
+            nearestTreatDist = d;
+            nearestTreat = treats[i];
+          }
+        }
+        // Só entra em SEEK_TREAT se houver petisco
+        if (nearestTreat && fish.state !== 'SEEK_TREAT') {
+          fish.state = 'SEEK_TREAT';
+          fish.stateTimer = 0;
+        }
+      } else if (fish.state === 'SEEK_TREAT' && treats.length === 0) {
+        fish.state = 'COAST';
+        fish.stateTimer = 0;
+      }
+
+      // 3. Máquina de Estados Comportamental
+      let thrustEffort = 0.25;
+
+      if (fish.state === 'FLEE') {
+        fish.fleeTimer -= dt;
+        const fleeTargetSpeed = cruiseSpeed * arch.fearBoost;
+        // Arrancada rápida no início da fuga, depois desliza longe
+        if (fish.stateTimer < 0.42) {
+          fish.speed = THREE.MathUtils.lerp(fish.speed, fleeTargetSpeed, Math.min(1, dt * 8.5));
+          thrustEffort = 1.48;
+        } else {
+          fish.speed = THREE.MathUtils.lerp(fish.speed, cruiseSpeed * 1.45, Math.min(1, dt * 2.2));
+          thrustEffort = 0.72;
+        }
+
+        if (fish.fleeTimer <= 0) {
+          fish.state = 'COAST';
+          fish.stateTimer = 0;
+        }
+      } else if (fish.state === 'SEEK_TREAT' && nearestTreat) {
+        // Nada animada em direção ao petisco (com impulso se estiver mais longe)
+        const targetSpd = cruiseSpeed * (nearestTreatDist > 4.5 ? 1.42 * arch.appetite : 1.08 * arch.appetite);
+        fish.speed = THREE.MathUtils.lerp(fish.speed, targetSpd, Math.min(1, dt * 3.2));
+        thrustEffort = nearestTreatDist > 4.0 ? 0.85 : 0.48;
+
+        // Posição da boca (focinho) para comer o petisco
+        const scale = params.fishScale * arch.scale;
+        const mouthX = fish.pos.x + Math.sin(fish.heading) * (1.85 * scale);
+        const mouthZ = fish.pos.y + Math.cos(fish.heading) * (1.85 * scale);
+        const mouthDist = Math.hypot(mouthX - nearestTreat.pos.x, mouthZ - nearestTreat.pos.y);
+
+        if (mouthDist < 0.62 * scale + 0.22) {
+          // Comeu o petisco!
+          const idx = treats.indexOf(nearestTreat);
+          if (idx !== -1) {
+            spawnBiteEffect(nearestTreat.pos.x, nearestTreat.pos.y);
+            scene.remove(nearestTreat.group);
+            treats.splice(idx, 1);
+          }
+          fish.state = 'COAST';
+          fish.stateTimer = 0;
+          fish.wanderAngle += (Math.random() > 0.5 ? 1 : -1) * 1.3;
+        }
+      } else if (fish.state === 'REST') {
+        // Algumas carpas (como a Showa e a Asagi) gostam de ficar quase paradas deslizando lentamente
+        const restSpeed = cruiseSpeed * 0.36;
+        fish.speed = THREE.MathUtils.lerp(fish.speed, restSpeed, Math.min(1, dt * 1.8));
+        thrustEffort = 0.12;
+        fish.restDuration -= dt;
+        if (fish.restDuration <= 0) {
+          fish.state = 'CRUISE';
+          fish.stateTimer = 0;
+        }
+      } else if (fish.state === 'CRUISE') {
+        fish.nextBurstIn -= dt;
+        const speedErr = cruiseSpeed - fish.speed;
+        fish.speed += speedErr * Math.min(1.0, dt * 1.8);
+        thrustEffort = 0.32 + 0.08 * Math.sin(clockTime * 1.2 + fish.index);
+
+        if (fish.nextBurstIn <= 0) {
+          // Carpas mais calmas às vezes preferem descansar um pouco em vez de dar burst
+          if (Math.random() < arch.restTendency * 0.45) {
+            fish.state = 'REST';
+            fish.restDuration = 2.0 + Math.random() * 2.5;
+            scheduleNextBurst(fish);
+          } else {
+            triggerFishBurst(fish, 0.9 + Math.random() * 0.25);
+          }
+        }
+      } else if (fish.state === 'BURST') {
+        const p = Math.min(fish.stateTimer / fish.burstDuration, 1.0);
+        const impulseCurve = Math.sin(p * Math.PI);
+        const burstAccel = (burstPeakSpeed - cruiseSpeed) * 3.8 * impulseCurve;
+        fish.speed += burstAccel * dt;
+        fish.speed = Math.min(fish.speed, burstPeakSpeed * 1.15);
+        thrustEffort = 0.55 + 1.15 * impulseCurve;
+
+        if (fish.stateTimer >= fish.burstDuration) {
+          fish.state = 'COAST';
+          fish.stateTimer = 0;
+        }
+      } else if (fish.state === 'COAST') {
+        const waterDrag = 1.08;
+        const floorSpeed = cruiseSpeed * 0.68;
+        const excess = Math.max(0, fish.speed - floorSpeed);
+        fish.speed = floorSpeed + excess * Math.exp(-waterDrag * dt);
+        thrustEffort = 0.08;
+
+        if (fish.speed <= cruiseSpeed * 1.05 && fish.stateTimer > 1.0) {
+          fish.state = 'CRUISE';
+          fish.stateTimer = 0;
+        }
+      }
+
+      // 4. Steering Behaviors (Wander + Petisco + Fuga + Curiosidade + Separação + Bordas)
+      fish.wanderAngle += (Math.sin(clockTime * 0.7 + fish.index * 2.1) * 0.6 + (Math.random() - 0.5) * 1.7) * dt;
+      const forwardX = Math.sin(fish.heading);
+      const forwardZ = Math.cos(fish.heading);
+
+      let steerX = forwardX * 3.0 + Math.sin(fish.wanderAngle) * 1.45;
+      let steerZ = forwardZ * 3.0 + Math.cos(fish.wanderAngle) * 1.45;
+
+      if (fish.state === 'FLEE') {
+        // Fuga ativa para longe do mouse, proporcional à personalidade (fleeDistanceBias)
+        const awayX = fish.pos.x - mouse.world.x;
+        const awayZ = fish.pos.y - mouse.world.y;
+        const baseAwayAngle = Math.atan2(awayX, awayZ) + fish.fleeHeadingOffset;
+        const fleeWeight = 12.0 * arch.fleeDistanceBias;
+        steerX = Math.sin(baseAwayAngle) * fleeWeight;
+        steerZ = Math.cos(baseAwayAngle) * fleeWeight;
+      } else if (fish.state === 'SEEK_TREAT' && nearestTreat) {
+        // Atração direta e suave ao petisco
+        const toX = nearestTreat.pos.x - fish.pos.x;
+        const toZ = nearestTreat.pos.y - fish.pos.y;
+        const len = Math.max(0.01, Math.hypot(toX, toZ));
+        steerX = (toX / len) * 10.5;
+        steerZ = (toZ / len) * 10.5;
+      } else if (params.interactiveMouse && mouse.inside && mouse.stillTime > 1.65) {
+        // CURIOSIDADE: mouse parado por um tempo atrai as carpas suavemente para perto
+        const curiosityRamp = Math.min(1.0, (mouse.stillTime - 1.65) / 2.6) * arch.curiosity;
+        const toX = mouse.world.x - fish.pos.x;
+        const toZ = mouse.world.y - fish.pos.y;
+        const dist = Math.max(0.1, Math.hypot(toX, toZ));
+        const nx = toX / dist;
+        const nz = toZ / dist;
+
+        // Componente tangencial para orbitar suavemente em volta do cursor sem bater nele
+        const tx = -nz * fish.curiosityOrbitSign;
+        const tz = nx * fish.curiosityOrbitSign;
+        const desiredOrbit = arch.curiosityOrbit;
+
+        if (dist > desiredOrbit + 0.6) {
+          // Aproxima-se com curiosidade
+          steerX += (nx * 4.4 + tx * 1.4) * curiosityRamp;
+          steerZ += (nz * 4.4 + tz * 1.4) * curiosityRamp;
+        } else if (dist < desiredOrbit - 0.5) {
+          // Mantém distância respeitosa orbitando
+          steerX += (-nx * 2.2 + tx * 3.8) * curiosityRamp;
+          steerZ += (-nz * 2.2 + tz * 3.8) * curiosityRamp;
+        } else {
+          // Circula calmamente observando o cursor parado
+          steerX += (tx * 4.2 + nx * 0.4) * curiosityRamp;
+          steerZ += (tz * 4.2 + nz * 0.4) * curiosityRamp;
+        }
+      }
+
+      // Separação suave entre as 5 carpas (evita sobreposição artificial)
+      for (let j = 0; j < fishList.length; j++) {
+        const other = fishList[j];
+        if (other === fish || !other.visible) continue;
+        const dx = fish.pos.x - other.pos.x;
+        const dz = fish.pos.y - other.pos.y;
+        const dSq = dx * dx + dz * dz;
+        const minSep = 2.65 * params.fishScale;
+        if (dSq < minSep * minSep && dSq > 0.001) {
+          const d = Math.sqrt(dSq);
+          const push = (1.0 - d / minSep) * (fish.state === 'SEEK_TREAT' ? 2.4 : 4.2);
+          steerX += (dx / d) * push;
+          steerZ += (dz / d) * push;
+        }
+      }
+
+      // Evasão suave das bordas da viewport
+      const marginX = Math.max(2.6, worldBounds.halfW * 0.22);
+      const marginZ = Math.max(2.2, worldBounds.halfH * 0.24);
+      const safeW = Math.max(1.5, worldBounds.halfW - marginX);
+      const safeH = Math.max(1.2, worldBounds.halfH - marginZ);
+
+      if (Math.abs(fish.pos.x) > safeW) {
+        const over = (Math.abs(fish.pos.x) - safeW) / marginX;
+        steerX -= Math.sign(fish.pos.x) * over * over * 11.5;
+      }
+      if (Math.abs(fish.pos.y) > safeH) {
+        const over = (Math.abs(fish.pos.y) - safeH) / marginZ;
+        steerZ -= Math.sign(fish.pos.y) * over * over * 11.5;
+      }
+
+      const desiredHeading = Math.atan2(steerX, steerZ);
+      const angleDiff = normalizeAngle(desiredHeading - fish.heading);
+
+      const maxTurnRate = fish.state === 'FLEE' ? 3.2 : (fish.state === 'SEEK_TREAT' ? 2.5 : 1.75);
+      const turnGain = fish.state === 'FLEE' ? 3.4 : (fish.state === 'SEEK_TREAT' ? 2.4 : 1.85);
+      const targetAngVel = THREE.MathUtils.clamp(angleDiff * turnGain, -maxTurnRate, maxTurnRate);
+      fish.angularVelocity = THREE.MathUtils.lerp(fish.angularVelocity, targetAngVel, Math.min(1, dt * 4.8));
+
+      fish.heading = normalizeAngle(fish.heading + fish.angularVelocity * dt);
+      fish.pos.x += Math.sin(fish.heading) * fish.speed * dt;
+      fish.pos.y += Math.cos(fish.heading) * fish.speed * dt;
+
+      // Aceleração real
+      const rawAccel = (fish.speed - fish.prevSpeed) / Math.max(dt, 0.001);
+      fish.acceleration = THREE.MathUtils.lerp(fish.acceleration, rawAccel, Math.min(1, dt * 8.0));
+      fish.prevSpeed = fish.speed;
+
+      // 5. Acoplamento Corpo-Física (Vertex Shader Uniforms)
+      const accelBoost = Math.max(0, fish.acceleration) * 0.16;
+      const targetEffort = THREE.MathUtils.clamp(thrustEffort + accelBoost, 0.06, 1.85);
+      fish.smoothEffort = THREE.MathUtils.lerp(fish.smoothEffort, targetEffort, Math.min(1, dt * 6.8));
+
+      const swimFreq = 2.5 + fish.smoothEffort * 8.6;
+      fish.swimPhase += swimFreq * dt;
+
+      const tailAmp = 0.10 + fish.smoothEffort * 0.34;
+
+      fish.smoothSpineCurve = THREE.MathUtils.lerp(
+        fish.smoothSpineCurve,
+        fish.angularVelocity * 0.50,
+        Math.min(1, dt * 6.2)
+      );
+
+      const fastMode = fish.state === 'BURST' || fish.state === 'FLEE';
+      const targetSpread = fastMode
+        ? 0.08
+        : (fish.state === 'COAST' || fish.state === 'REST' ? 0.56 : 0.38);
+      fish.smoothPectSpread = THREE.MathUtils.lerp(fish.smoothPectSpread, targetSpread, Math.min(1, dt * 4.2));
+
+      fish.pectRowPhase += (1.7 + fish.smoothEffort * 1.4) * dt;
+      const gentleRow = Math.sin(fish.pectRowPhase) * (fastMode ? 0.04 : 0.11);
+      const turnL = Math.max(0, fish.angularVelocity) * 0.22;
+      const turnR = Math.max(0, -fish.angularVelocity) * 0.22;
+
+      fish.uniforms.uSwimPhase.value = fish.swimPhase;
+      fish.uniforms.uTailAmp.value = tailAmp;
+      fish.uniforms.uSpineCurve.value = fish.smoothSpineCurve;
+      fish.uniforms.uPectoralSpread.value = fish.smoothPectSpread;
+      fish.uniforms.uPectoralRowL.value = gentleRow + turnL;
+      fish.uniforms.uPectoralRowR.value = -gentleRow + turnR;
+
+      // 6. Aplica posição, rotação, profundidade e sombra proporcional
+      const s = params.fishScale * arch.scale;
+      const bobY = Math.sin(clockTime * 1.1 + fish.index * 1.7) * 0.06;
+      const yPos = arch.depthY + bobY;
+
+      fish.group.position.set(fish.pos.x, yPos, fish.pos.y);
+      fish.group.rotation.y = fish.heading;
+      fish.group.scale.set(s * arch.widthRatio, s, s);
+
+      // Quanto mais alta a carpa na coluna d'água, maior o deslocamento da sombra no fundo
+      const heightAboveBottom = yPos - (-3.3);
+      const shadowOffsetFactor = heightAboveBottom / 3.3;
+      fish.shadowGroup.position.set(
+        fish.pos.x + 1.12 * shadowOffsetFactor,
+        -3.28 + fish.index * 0.004,
+        fish.pos.y + 1.02 * shadowOffsetFactor
+      );
+      fish.shadowGroup.rotation.y = fish.heading;
+      fish.shadowGroup.scale.set(s * arch.widthRatio * 1.04, s, s * 1.04);
+    }
+
+    // =========================================================================
+    // 11. PAINEL LIL-GUI (RECOLHIDO POR PADRÃO) + LIVELY WALLPAPER API
+    // =========================================================================
+    let gui = null;
+    const guiControllers = {};
+
+    function initGui() {
+      try {
+        const { GUI } = window.lil;
+        gui = new GUI({ title: 'Koi Pond · Controles', width: 260 });
+
+        guiControllers.fishCount = gui
+          .add(params, 'fishCount', 1, 5, 1)
+          .name('Quantidade de Carpas')
+          .onChange(syncFishCount);
+
+        guiControllers.burstFrequency = gui
+          .add(params, 'burstFrequency', 0.3, 2.5, 0.05)
+          .name('Frequência Impulsos');
+
+        guiControllers.baseSpeed = gui
+          .add(params, 'baseSpeed', 1.0, 5.0, 0.1)
+          .name('Velocidade Base');
+
+        guiControllers.causticsIntensity = gui
+          .add(params, 'causticsIntensity', 0.0, 2.2, 0.05)
+          .name('Intensidade Cáusticas')
+          .onChange(syncCausticsUniform);
+
+        guiControllers.fishScale = gui
+          .add(params, 'fishScale', 0.55, 1.65, 0.05)
+          .name('Tamanho das Carpas');
+
+        guiControllers.interactiveMouse = gui
+          .add(params, 'interactiveMouse')
+          .name('Interação Mouse');
+
+        gui.add(params, 'dropTreatCenter').name('🍤 Soltar Petisco');
+        gui.add(params, 'triggerAllBursts').name('⚡ Disparar Impulsos');
+
+        gui.close();
+        syncGuiVisibility();
+      } catch (err) {
+        console.warn('lil-gui indisponível (modo offline):', err);
+      }
+    }
+
+    function syncCausticsUniform() {
+      pondBottomUniforms.uCausticsIntensity.value = params.causticsIntensity;
+      waterSurfaceUniforms.uCausticsIntensity.value = params.causticsIntensity;
+      globalFishUniforms.uCausticsIntensity.value = params.causticsIntensity;
+    }
+
+    function syncGuiVisibility() {
+      if (!gui) return;
+      gui.domElement.classList.toggle('hidden-gui', !params.showGui);
+    }
+
+    window.livelyPropertyListener = function (name, val) {
+      if (name === 'fishCount') {
+        params.fishCount = Math.max(1, Math.min(5, Number(val)));
+        syncFishCount();
+      } else if (name === 'burstFrequency') {
+        params.burstFrequency = Number(val) / 100;
+      } else if (name === 'baseSpeed') {
+        params.baseSpeed = (Number(val) / 100) * 2.25;
+      } else if (name === 'causticsIntensity') {
+        params.causticsIntensity = Number(val) / 100;
+        syncCausticsUniform();
+      } else if (name === 'fishScale') {
+        params.fishScale = Number(val) / 100;
+      } else if (name === 'interactiveMouse') {
+        params.interactiveMouse = Boolean(val);
+      } else if (name === 'showGui') {
+        params.showGui = Boolean(val);
+        syncGuiVisibility();
+      }
+      if (guiControllers[name]) {
+        guiControllers[name].updateDisplay();
+      }
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'p' || e.key === 'P' || e.key === 'h' || e.key === 'H') {
+        params.showGui = !params.showGui;
+        syncGuiVisibility();
+      } else if (e.code === 'Space') {
+        params.dropTreatCenter();
+      }
+    });
+
+    initGui();
+
+    // =========================================================================
+    // 12. RESIZE E LOOP PRINCIPAL A 60 FPS
+    // =========================================================================
+    function onResize() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      updateBounds();
+      pondBottomUniforms.uHalfSize.value.set(worldBounds.halfW, worldBounds.halfH);
+      waterSurfaceUniforms.uHalfSize.value.set(worldBounds.halfW, worldBounds.halfH);
+      moteUniforms.uPixelRatio.value = renderer.getPixelRatio();
+    }
+    window.addEventListener('resize', onResize);
+
+    let lastNow = performance.now();
+    let clockTime = 0;
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min((now - lastNow) * 0.001, 0.05);
+      lastNow = now;
+      clockTime += dt;
+
+      pondBottomUniforms.uTime.value = clockTime;
+      waterSurfaceUniforms.uTime.value = clockTime;
+      globalFishUniforms.uTime.value = clockTime;
+      moteUniforms.uTime.value = clockTime;
+
+      updateMouseState(dt);
+      updateTreatsAndBites(dt);
+
+      for (let i = 0; i < fishList.length; i++) {
+        updateSingleFish(fishList[i], dt);
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>

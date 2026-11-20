@@ -1,0 +1,68 @@
+{
+  "preset": {
+    "text": "Arquétipo de Esfera",
+    "type": "dropdown",
+    "value": 0,
+    "items": [
+      "1 · Vórtice Solar (Fitas em Espiral)",
+      "2 · Combustão Radial (Erupção Carmesim 360°)",
+      "3 · Pulso de Éter (Ondas Concêntricas)",
+      "4 · Tempestade de Plasma (Raios Caóticos)",
+      "5 · Estrela Solar (Fotosfera & Coroa 360°)",
+      "6 · Vitrine · As 5 Esferas"
+    ]
+  },
+  "sphereScale": {
+    "text": "Tamanho da Esfera (%)",
+    "type": "slider",
+    "min": 40,
+    "max": 200,
+    "step": 5,
+    "value": 100
+  },
+  "flameIntensity": {
+    "text": "Emissão de Fogo/Fumaça (%)",
+    "type": "slider",
+    "min": 20,
+    "max": 250,
+    "step": 5,
+    "value": 100
+  },
+  "swirlSpeed": {
+    "text": "Velocidade Física (%)",
+    "type": "slider",
+    "min": 20,
+    "max": 250,
+    "step": 5,
+    "value": 100
+  },
+  "turbulence": {
+    "text": "Turbulência / Cachos (%)",
+    "type": "slider",
+    "min": 20,
+    "max": 220,
+    "step": 5,
+    "value": 110
+  },
+  "smokeLifetime": {
+    "text": "Alcance da Fumaça (%)",
+    "type": "slider",
+    "min": 40,
+    "max": 220,
+    "step": 5,
+    "value": 100
+  },
+  "glowStrength": {
+    "text": "Intensidade do Brilho HDR (%)",
+    "type": "slider",
+    "min": 40,
+    "max": 250,
+    "step": 5,
+    "value": 115
+  },
+  "interactiveMouse": {
+    "text": "Perturbar fumaça com o mouse",
+    "type": "checkbox",
+    "value": true
+  }
+}

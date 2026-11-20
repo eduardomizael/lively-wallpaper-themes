@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ori · 5 Luminous Energy Spheres (Navier-Stokes WebGL2)</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="gl-canvas" aria-label="5 esferas de energia com comportamentos físicos distintos em WebGL2"></canvas>
+
+  <nav id="mode-bar" hidden>
+    <button class="mode-btn active" data-mode="0">1 · Vórtice Solar</button>
+    <button class="mode-btn" data-mode="1">2 · Combustão Radial</button>
+    <button class="mode-btn" data-mode="2">3 · Pulso de Éter</button>
+    <button class="mode-btn" data-mode="3">4 · Raios Caóticos</button>
+    <button class="mode-btn" data-mode="4">5 · Estrela Solar</button>
+    <button class="mode-btn" data-mode="5">6 · As 5 Esferas</button>
+  </nav>
+
+  <section id="controls" hidden>
+    <header>
+      <span class="eyebrow">5 ARQUÉTIPOS FÍSICOS · WEBGL2</span>
+      <h1>Energy Spheres<span> / v6</span></h1>
+      <p>Emanação 360° esparsa em múltiplas direções, combustão radial, raios caóticos e fotosfera solar.</p>
+    </header>
+
+    <label>Arquétipo / Modo
+      <select id="preset">
+        <option value="0" selected>1 · Vórtice Solar (Fitas em Espiral)</option>
+        <option value="1">2 · Combustão Radial (Erupção Carmesim 360°)</option>
+        <option value="2">3 · Pulso de Éter (Ondas Concêntricas)</option>
+        <option value="3">4 · Tempestade de Plasma (Raios Caóticos)</option>
+        <option value="4">5 · Estrela Solar (Fotosfera &amp; Coroa 360°)</option>
+        <option value="5">6 · Vitrine · As 5 Esferas</option>
+      </select>
+    </label>
+
+    <h2 class="control-section">Dinâmica de Fogo &amp; Fumaça</h2>
+    <label>Tamanho da Esfera (%) <input id="sphereScale" type="range" min="40" max="200" step="5" value="100"></label>
+    <label>Emissão de Fogo/Fumaça (%) <input id="flameIntensity" type="range" min="20" max="250" step="5" value="100"></label>
+    <label>Velocidade Física (%) <input id="swirlSpeed" type="range" min="20" max="250" step="5" value="100"></label>
+    <label>Turbulência / Cachos (%) <input id="turbulence" type="range" min="20" max="220" step="5" value="110"></label>
+    <label>Alcance da Fumaça (%) <input id="smokeLifetime" type="range" min="40" max="220" step="5" value="100"></label>
+    <label>Brilho HDR (%) <input id="glowStrength" type="range" min="40" max="250" step="5" value="115"></label>
+    <label>Interação do Mouse <input id="interactiveMouse" type="checkbox" checked></label>
+
+    <button id="hide" class="action-btn">Ocultar painel · tecla P (1–6 alterna modos)</button>
+  </section>
+
+  <script src="shaders.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

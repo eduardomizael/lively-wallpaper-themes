@@ -1,0 +1,24 @@
+{
+  "AppVersion": "2.2.1.0",
+  "Title": "Lantern Sky · Clima e Lua",
+  "Thumbnail": "thumbnail.jpg",
+  "Preview": "preview.gif",
+  "Desc": "Lanternas de papel cruzam paisagens animadas. O céu acompanha sol, lua e clima da cidade selecionada, com cenários de demonstração disponíveis offline.",
+  "Author": "Dre",
+  "License": "",
+  "Contact": "",
+  "Type": 1,
+  "FileName": "index.html",
+  "Arguments": "",
+  "IsAbsolutePath": false,
+  "Id": "lantern-sky",
+  "Tags": [
+    "lantern",
+    "sky",
+    "3d",
+    "interactive",
+    "cursor",
+    "calm"
+  ],
+  "Version": 1
+}

@@ -1,6 +1,9 @@
-settings/desktop-map.json
-settings/desktop-map.js
-settings/collection-result.js
+node_modules/
 *.tmp
-mapper-error.log
-outputs/
+*.tgz
+*.log
+/.verificacao/
+**/SaveData/
+**/desktop-map.json
+**/desktop-map.js
+**/collection-result.js

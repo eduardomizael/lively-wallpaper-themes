@@ -1,0 +1,43 @@
+[
+  {
+    "id": "circuit-orbit",
+    "destino": "circuit-orbit-v2",
+    "arquivos": [
+      "LivelyInfo.json", "LivelyProperties.json", "index.html", "style.css",
+      "app.js", "atmosphere.js", "engine.js", "hud.js", "mouse-fluid.js",
+      "nucleus.js", "ori-orb-shaders.js", "ori-orbs.js", "shot-fluid.js",
+      "thumbnail.jpg", "preview.gif", "preview.html", "README.md", "VERSION",
+      "licenses/Fluids-MIT.txt", "Coletar-icones.cmd", "Configurar-utilitario.cmd",
+      "Remover-atalho-do-utilitario.cmd", "tools/Collect-Desktop.ps1",
+      "tools/DesktopMap.cs", "tools/Register-Collector.ps1", "tools/Unregister-Collector.ps1"
+    ]
+  },
+  {
+    "id": "koi-pond",
+    "destino": "koi-pond",
+    "arquivos": [
+      "LivelyInfo.json", "LivelyProperties.json", "index.html", "thumbnail.jpg",
+      "preview.html", "Abrir-previa.cmd", "README.md",
+      "vendor/three.min.js", "vendor/three-LICENSE.txt",
+      "vendor/lil-gui.min.js", "vendor/lil-gui-LICENSE.md"
+    ]
+  },
+  {
+    "id": "lantern-sky2",
+    "destino": "lantern-sky2",
+    "arquivos": [
+      "LivelyInfo.json", "LivelyProperties.json", "index.html", "thumbnail.jpg",
+      "preview.gif", "preview.html", "README.md", "LEIA-ME.txt", "local-sky.js",
+      "preview-controls.js", "radar-palette.js", "rain-radar.js", "scene-fx.js",
+      "SunCalc-LICENSE.txt", "suncalc.js", "weather-panel.js", "weather-sources.js"
+    ]
+  },
+  {
+    "id": "ori-energy-spheres",
+    "destino": "ori-energy-spheres",
+    "arquivos": [
+      "LivelyInfo.json", "LivelyProperties.json", "index.html", "thumbnail.jpg",
+      "preview.html", "Abrir-previa.cmd", "README.md", "app.js", "shaders.js", "style.css"
+    ]
+  }
+]

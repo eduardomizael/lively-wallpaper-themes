@@ -1,0 +1,508 @@
+{
+  "labelAtmosphere": {
+    "type": "label",
+    "value": "Ambiente e paisagem"
+  },
+  "celestialMotion": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Mover Sol e Lua conforme o horário",
+    "help": "Composição panorâmica: leste à esquerda, sul ao centro e oeste à direita. Requer localidade e dia/noite ativos."
+  },
+  "ambientLanterns": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Iluminação das lanternas conforme o ambiente"
+  },
+  "moonDimsStars": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Luar reduz a visibilidade das estrelas"
+  },
+  "windGusts": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Rajadas suaves de vento"
+  },
+  "gustStrength": {
+    "type": "slider",
+    "value": 50,
+    "min": 0,
+    "max": 100,
+    "step": 5,
+    "text": "Variação das rajadas (%)"
+  },
+  "transitionSeconds": {
+    "type": "slider",
+    "value": 20,
+    "min": 1,
+    "max": 120,
+    "step": 1,
+    "text": "Duração das transições (segundos)"
+  },
+  "stormLightning": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Relâmpagos distantes em tempestades"
+  },
+  "lightningIntensity": {
+    "type": "slider",
+    "value": 25,
+    "min": 0,
+    "max": 100,
+    "step": 5,
+    "text": "Intensidade dos relâmpagos (%)"
+  },
+  "scenery": {
+    "type": "dropdown",
+    "value": 3,
+    "text": "Paisagem",
+    "items": [
+      "Lago, montanhas e portal",
+      "Lago e montanhas",
+      "Montanhas",
+      "Somente céu",
+      "Montanhas e floresta"
+    ]
+  },
+  "labelDemo": {
+    "type": "label",
+    "value": "Demonstração"
+  },
+  "demoMode": {
+    "type": "dropdown",
+    "value": 0,
+    "text": "Experimentar cenário",
+    "items": [
+      "Condições reais",
+      "Dia limpo",
+      "Pôr do sol",
+      "Noite limpa",
+      "Chuva",
+      "Tempestade",
+      "Neve",
+      "Neblina",
+      "Noite de Lua cheia",
+      "Amanhecer"
+    ],
+    "help": "Demonstração funciona sem internet. Volte a “Condições reais” para acompanhar sua localidade."
+  },
+  "demoMoonPhase": {
+    "type": "slider",
+    "value": 50,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Fase da Lua na demonstração (%)",
+    "help": "0/100 nova; 25 quarto crescente; 50 cheia; 75 quarto minguante. O cenário Lua cheia fixa a fase em 50."
+  },
+  "labelLocal": {
+    "type": "label",
+    "value": "Clima e Lua locais"
+  },
+  "weatherAuto": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Ativar condições locais",
+    "help": "Informe a cidade abaixo. Desligue para restaurar o céu manual."
+  },
+  "localCity": {
+    "type": "textbox",
+    "value": "",
+    "text": "Cidade",
+    "help": "Exemplo: Goiânia. A consulta começa após você preencher este campo."
+  },
+  "localCountry": {
+    "type": "textbox",
+    "value": "BR",
+    "text": "Código do país",
+    "help": "Duas letras: BR, PT, US. Vazio para pesquisar todos os países."
+  },
+  "localResult": {
+    "type": "slider",
+    "value": 1,
+    "min": 1,
+    "max": 10,
+    "step": 1,
+    "text": "Local encontrado",
+    "help": "Escolha outro resultado se houver cidades homônimas. Confira o nome completo no painel do wallpaper."
+  },
+  "weatherInterval": {
+    "type": "slider",
+    "value": 30,
+    "min": 5,
+    "max": 180,
+    "step": 5,
+    "text": "Consultar clima a cada (minutos)"
+  },
+  "weatherProvider": {
+    "type": "dropdown",
+    "value": 0,
+    "text": "Fonte meteorológica",
+    "items": [
+      "WeatherAPI, com reserva Open-Meteo",
+      "Open-Meteo"
+    ],
+    "help": "Sem chave WeatherAPI, usa Open-Meteo. Em caso de falha, a reserva é automática."
+  },
+  "weatherApiKey": {
+    "type": "textbox",
+    "value": "",
+    "text": "Chave WeatherAPI",
+    "help": "Cadastre-se em weatherapi.com e cole a chave aqui. O Lively salva este campo localmente."
+  },
+  "radarEnabled": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Usar RainViewer para chuva próxima",
+    "help": "Ecos recentes podem ativar chuva perto do centro da cidade. Ausência de eco não garante tempo seco. Fonte e créditos disponíveis no painel completo."
+  },
+  "radarInterval": {
+    "type": "slider",
+    "value": 5,
+    "min": 5,
+    "max": 30,
+    "step": 5,
+    "text": "Consultar radar a cada (minutos)"
+  },
+  "localRefresh": {
+    "type": "button",
+    "value": "Atualizar agora",
+    "text": "Consultar clima agora"
+  },
+  "localDayNight": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Acompanhar dia e noite",
+    "help": "Desligado: mantém o céu noturno com o clima local."
+  },
+  "localMoon": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Fase e orientação reais da Lua",
+    "help": "Fase e orientação locais. Ative “Mover Sol e Lua” para acompanhar a posição panorâmica no céu."
+  },
+  "localWind": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Vento local nas nuvens e lanternas"
+  },
+  "localPrecipitation": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Efeitos de chuva e neve"
+  },
+  "localStatus": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Mostrar painel de informações",
+    "help": "Exibe cidade, temperatura e condição em uma linha. Clique nela para abrir ou recolher os detalhes."
+  },
+  "labelLanterns": {
+    "type": "label",
+    "value": "Lanterns"
+  },
+  "lanternShape": {
+    "type": "dropdown",
+    "value": 1,
+    "text": "Lantern shape",
+    "items": [
+      "Mixed",
+      "Sky lantern",
+      "Round chochin",
+      "Tall chochin",
+      "Palace lantern",
+      "Square andon"
+    ],
+    "help": "The type of paper lantern. Mixed uses all five."
+  },
+  "decoration": {
+    "type": "dropdown",
+    "value": 5,
+    "text": "Paper decoration",
+    "items": [
+      "Plain",
+      "Painted bands",
+      "Family crest",
+      "Wish kanji",
+      "Glowing kanji",
+      "Mixed (mostly plain)"
+    ],
+    "help": "What is painted on the paper."
+  },
+  "lanternCount": {
+    "type": "slider",
+    "value": 140,
+    "min": 20,
+    "max": 320,
+    "step": 5,
+    "text": "Number of lanterns",
+    "help": "Setting this turns off the automatic performance reduction."
+  },
+  "lanternSize": {
+    "type": "slider",
+    "value": 100,
+    "min": 50,
+    "max": 200,
+    "step": 5,
+    "text": "Size (%)"
+  },
+  "riseSpeed": {
+    "type": "slider",
+    "value": 100,
+    "min": 0,
+    "max": 250,
+    "step": 5,
+    "text": "Rise speed (%)"
+  },
+  "wind": {
+    "type": "slider",
+    "value": 15,
+    "min": -100,
+    "max": 100,
+    "step": 1,
+    "text": "Wind",
+    "help": "Negative values blow to the left, positive to the right."
+  },
+  "sway": {
+    "type": "slider",
+    "value": 50,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Sway"
+  },
+  "flicker": {
+    "type": "slider",
+    "value": 50,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Candle flicker"
+  },
+  "depthOfField": {
+    "type": "slider",
+    "value": 50,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Depth of field",
+    "help": "Softens the lanterns closest to the camera, like a lens focused on the sky."
+  },
+  "embers": {
+    "type": "slider",
+    "value": 50,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Floating embers"
+  },
+  "labelColors": {
+    "type": "label",
+    "value": "Lantern colors"
+  },
+  "palette": {
+    "type": "dropdown",
+    "value": 1,
+    "text": "Palette",
+    "items": [
+      "Custom (use the colors below)",
+      "Warm Amber",
+      "Festival Red",
+      "Sakura Pink",
+      "Jade Garden",
+      "Moonlight Blue",
+      "Rainbow",
+      "Festival Mix"
+    ],
+    "help": "The three colors below are used only with the Custom palette."
+  },
+  "color1": {
+    "type": "color",
+    "value": "#ffb347",
+    "text": "Custom color 1"
+  },
+  "color2": {
+    "type": "color",
+    "value": "#ff5a3d",
+    "text": "Custom color 2"
+  },
+  "color3": {
+    "type": "color",
+    "value": "#ff9ec7",
+    "text": "Custom color 3"
+  },
+  "glow": {
+    "type": "slider",
+    "value": 70,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Glow"
+  },
+  "labelCursor": {
+    "type": "label",
+    "value": "Cursor"
+  },
+  "interact": {
+    "type": "checkbox",
+    "value": true,
+    "text": "React to the cursor",
+    "help": "Requires Lively > Settings > Wallpaper > Input set to Mouse."
+  },
+  "mode": {
+    "type": "dropdown",
+    "value": 0,
+    "items": [
+      "Push",
+      "Swirl",
+      "Gather"
+    ],
+    "text": "Cursor effect"
+  },
+  "strength": {
+    "type": "slider",
+    "value": 60,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Strength"
+  },
+  "radius": {
+    "type": "slider",
+    "value": 50,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Radius",
+    "help": "How far from the cursor the lanterns feel it."
+  },
+  "calm": {
+    "type": "slider",
+    "value": 22,
+    "min": 5,
+    "max": 60,
+    "step": 1,
+    "text": "Return time (tenths of a second)",
+    "help": "How long a pushed lantern takes to drift back to its path."
+  },
+  "cursorLight": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Lanterns brighten when touched"
+  },
+  "parallax": {
+    "type": "slider",
+    "value": 35,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Parallax",
+    "help": "Near lanterns shift more than far ones as the cursor moves, for a sense of depth."
+  },
+  "labelSky": {
+    "type": "label",
+    "value": "Sky"
+  },
+  "skyPreset": {
+    "type": "dropdown",
+    "value": 1,
+    "text": "Sky",
+    "items": [
+      "Custom (use the colors below)",
+      "Blue Hour",
+      "Indigo Night",
+      "Twilight Festival",
+      "Midnight Blue",
+      "Teal Dream"
+    ]
+  },
+  "skyTop": {
+    "type": "color",
+    "value": "#081427",
+    "text": "Custom sky top"
+  },
+  "skyHorizon": {
+    "type": "color",
+    "value": "#f0a46a",
+    "text": "Custom sky horizon"
+  },
+  "milkyWay": {
+    "type": "slider",
+    "value": 30,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Milky Way"
+  },
+  "twinkle": {
+    "type": "slider",
+    "value": 60,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Star twinkle"
+  },
+  "moon": {
+    "type": "dropdown",
+    "value": 0,
+    "items": [
+      "None",
+      "Full moon",
+      "Crescent"
+    ],
+    "text": "Moon"
+  },
+  "shootingStars": {
+    "type": "checkbox",
+    "value": true,
+    "text": "Shooting stars"
+  },
+  "clouds": {
+    "type": "slider",
+    "value": 55,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Clouds"
+  },
+  "seed": {
+    "type": "slider",
+    "value": 7,
+    "min": 1,
+    "max": 60,
+    "step": 1,
+    "text": "Variation",
+    "help": "Reshapes the clouds, stars and lantern layout."
+  },
+  "labelDesktop": {
+    "type": "label",
+    "value": "Desktop"
+  },
+  "iconZone": {
+    "type": "slider",
+    "value": 60,
+    "min": 0,
+    "max": 100,
+    "step": 1,
+    "text": "Darken icon area",
+    "help": "Keeps the top-left corner calm so desktop icons stay readable."
+  },
+  "quality": {
+    "type": "dropdown",
+    "value": 0,
+    "items": [
+      "Auto",
+      "High",
+      "Medium",
+      "Low"
+    ],
+    "text": "Quality",
+    "help": "Auto lowers the detail by itself if the frame rate drops."
+  },
+  "diagnostics": {
+    "type": "checkbox",
+    "value": false,
+    "text": "Show diagnostics"
+  }
+}
