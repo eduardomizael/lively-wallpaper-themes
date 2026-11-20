@@ -126,6 +126,7 @@
       rippleIndex = (rippleIndex + 1) % MAX_RIPPLES;
     }
 
+    // Cellular-noise references: Inigo Quilez (Voronoise) and The Book of Shaders, ch. 12.
     const CAUSTICS_GLSL = /* glsl */ `
       vec2 hash22(vec2 p) {
         p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));

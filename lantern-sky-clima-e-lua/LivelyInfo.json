@@ -1,9 +1,9 @@
 {
   "AppVersion": "2.2.1.0",
-  "Title": "Lantern Sky · Clima e Lua",
+  "Title": "Lantern Sky · Edição Clima e Lua",
   "Thumbnail": "thumbnail.jpg",
   "Preview": "preview.gif",
-  "Desc": "Lanternas de papel cruzam paisagens animadas. O céu acompanha sol, lua e clima da cidade selecionada, com cenários de demonstração disponíveis offline.",
+  "Desc": "Adaptação de Lantern Sky, de Dre, por Eduardo Mizael Clemente. Lanternas cruzam paisagens animadas com Sol, Lua e clima da cidade escolhida.",
   "Author": "Dre",
   "License": "",
   "Contact": "",
@@ -11,7 +11,7 @@
   "FileName": "index.html",
   "Arguments": "",
   "IsAbsolutePath": false,
-  "Id": "lantern-sky",
+  "Id": "lantern-sky-clima-e-lua",
   "Tags": [
     "lantern",
     "sky",

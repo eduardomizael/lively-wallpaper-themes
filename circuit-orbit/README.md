@@ -4,6 +4,13 @@
 
 Versão `2.5.0-beta.2`. Um feixe de energia percorre os ícones do desktop e ativa marcadores a cada impacto. A versão original e as revisões anteriores estão nas tags `circuit-orbit/*` do repositório.
 
+## Créditos
+
+- **Eduardo Mizael Clemente** desenvolveu o Circuit Orbit. Suas contribuições estão sob a licença MIT incluída no pacote.
+- **Pavel Dobryakov** criou o WebGL Fluid Simulation. Os shaders de fumaça do cursor, rastros de tiros e explosões usam código adaptado de **Fluids**, a edição para Lively mantida por **Dani John (rocksdanister)**. [Projeto original](https://github.com/PavelDoGreat/WebGL-Fluid-Simulation) · [Adaptação para Lively](https://github.com/rocksdanister/WebGL-Fluid-Simulation) · [Licença MIT](licenses/Fluids-MIT.txt)
+- Os cinco marcadores v7 reutilizam os shaders e adaptam o simulador do tema **Ori · Spirit Energy Spheres**, de Eduardo Mizael Clemente. O hash usado pelo ruído dos orbes vem de **David Hoskins**. [Estudo original](../ori-energy-spheres/README.md) · [Hash without Sine](https://www.shadertoy.com/view/4djSRW) · [Licença MIT](licenses/Hash-without-Sine-MIT.txt)
+- A referência visual do núcleo de névoa é *Ori and the Blind Forest*, desenvolvido pela **Moon Studios** e publicado pela **Microsoft Studios**. [Créditos oficiais do jogo](https://www.xbox.com/en-us/games/store/ori-and-the-blind-forest/C0MCC9R22KBJ)
+
 ## Todos os marcadores aleatórios
 
 **Aleatório — todos os marcadores** mistura os sete estilos. Cada estação usa um dos sete com a mesma probabilidade, determinado pela amostra aleatória de orientação já criada no primeiro impacto. O estilo fica estável durante toda a vida do marcador, inclusive ao ser atingido novamente antes de desaparecer. Depois de expirar, o próximo impacto pode escolher outro. O sorteio não consome novos números do gerador que escolhe os destinos e não altera o percurso dos tiros.

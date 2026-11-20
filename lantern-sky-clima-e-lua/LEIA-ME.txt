@@ -1,4 +1,7 @@
-LANTERN SKY — CLIMA, ASTRONOMIA E PAISAGENS
+LANTERN SKY · EDIÇÃO CLIMA E LUA
+
+Versão adaptada de Lantern Sky, tema original de Dre.
+Adaptações de clima, astronomia e paisagem por Eduardo Mizael Clemente.
 
 NO LIVELY
 Recarregue o wallpaper e abra Personalizar.
@@ -108,7 +111,8 @@ Não se utiliza localização automática por GPS/IP.
 
 Astronomia continua local: SunCalc 1.9.0 (BSD-2-Clause).
 https://github.com/mourner/suncalc/tree/v1.9.0 — veja SunCalc-LICENSE.txt.
-Mantida a autoria original do tema no LivelyInfo.json.
+O LivelyInfo.json credita Dre como autor original. Consulte README.md para
+os créditos e o alcance da licença MIT das adaptações.
 
 VALIDAÇÃO DAS FONTES
 WeatherAPI: integração verificada com respostas simuladas, incluindo chave

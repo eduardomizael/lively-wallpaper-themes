@@ -29,6 +29,7 @@
       );
     }
 
+    // Hash without Sine (hash12), David Hoskins (MIT). See licenses/Hash-without-Sine-MIT.txt.
     float hash(vec2 p) {
       vec3 p3 = fract(vec3(p.xyx) * 0.1031);
       p3 += dot(p3, p3.yzx + 33.33);

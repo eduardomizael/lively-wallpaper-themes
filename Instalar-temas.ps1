@@ -55,9 +55,9 @@ if ($Temas) {
     if ($Temas.Count -eq 1 -and $Temas[0] -eq 'todos') {
         $selected = $catalog
     } else {
-        $unknown = @($Temas | Where-Object { $_ -notin $catalog.id })
+        $unknown = @($Temas | Where-Object { $_ -notin $catalog.id -and $_ -notin $catalog.destino })
         if ($unknown.Count) { throw "Tema(s) desconhecido(s): $($unknown -join ', ')." }
-        $selected = @($catalog | Where-Object { $_.id -in $Temas })
+        $selected = @($catalog | Where-Object { $_.id -in $Temas -or $_.destino -in $Temas })
     }
 }
 
@@ -147,6 +147,7 @@ foreach ($theme in $selected) {
     $backup = $null
     try {
         $null = [IO.Directory]::CreateDirectory($stage)
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'LICENSE') -Destination $stage
         foreach ($file in $theme.arquivos) {
             $from = Join-Path $source $file
             $to = Join-Path $stage $file

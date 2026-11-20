@@ -21,3 +21,10 @@ Cinco carpas 3D procedurais nadam num lago em vista superior, com cáusticas ani
 - Instale `koi-pond` pelo [instalador da coleção](../README.md#instalar). No Lively, abra **Personalizar** para ajustar quantidade, velocidade e tamanho das carpas, cáusticas e interação.
 
 `vendor/three.min.js` foi gerado a partir de `build/three.module.js` do pacote npm Three.js com esbuild 0.25.12 (`--bundle --format=iife --global-name=THREE --minify --target=es2020`). O lil-gui usa a distribuição UMD oficial.
+
+## Créditos
+
+- **Eduardo Mizael Clemente** desenvolveu o Koi Pond. Suas contribuições estão sob a licença MIT incluída no pacote.
+- As cáusticas usam ruído celular de Voronoi com o padrão de hash difundido por **Inigo Quilez**. A busca na vizinhança das células e a animação dos pontos seguem a técnica descrita por **Patricio Gonzalez Vivo e Jen Lowe**. [Voronoise](https://iquilezles.org/articles/voronoise/) · [The Book of Shaders, capítulo sobre ruído celular](https://thebookofshaders.com/12/)
+- **Three.js**, de Ricardo Cabello (mrdoob) e colaboradores, renderiza a cena. [Projeto Three.js](https://github.com/mrdoob/three.js) · [Licença MIT](vendor/three-LICENSE.txt)
+- **lil-gui**, de George Michael Brower, fornece os controles da prévia. [Projeto lil-gui](https://github.com/georgealways/lil-gui) · [Licença MIT](vendor/lil-gui-LICENSE.md)

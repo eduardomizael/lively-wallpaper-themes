@@ -6,7 +6,7 @@ Quatro papéis de parede animados para o Lively Wallpaper no Windows. Cada tema 
 | --- | --- | --- |
 | <img src="circuit-orbit/thumbnail.jpg" width="216" alt="Marcadores luminosos"> | [Circuit Orbit](circuit-orbit/README.md) | Feixes entre os ícones do desktop, sete marcadores e efeitos de energia que reagem ao mouse. |
 | <img src="koi-pond/thumbnail.jpg" width="216" alt="Carpas em um lago"> | [Koi Pond](koi-pond/README.md) | Cinco variedades de carpa 3D reagem ao cursor e disputam petiscos. |
-| <img src="lantern-sky2/thumbnail.jpg" width="216" alt="Lanternas no céu"> | [Lantern Sky](lantern-sky2/README.md) | Lanternas de papel e um céu que acompanha a Lua, o Sol e o clima local. |
+| <img src="lantern-sky-clima-e-lua/thumbnail.jpg" width="216" alt="Lanternas no céu"> | [Lantern Sky · Edição Clima e Lua](lantern-sky-clima-e-lua/README.md) | Adaptação de Lantern Sky, de Dre, com Lua, Sol e clima local. |
 | <img src="ori-energy-spheres/thumbnail.jpg" width="216" alt="Cinco esferas de energia"> | [Ori · Spirit Energy Spheres](ori-energy-spheres/README.md) | Cinco esferas procedurais com vórtices, coroas e plasma. |
 
 ## Instalar
@@ -23,7 +23,7 @@ Na raiz do projeto, use Windows PowerShell 5.1 ou PowerShell 7.
 
 ~~~powershell
 .\Instalar-temas.ps1
-.\Instalar-temas.ps1 -Biblioteca 'D:\Lively\Library' -Temas koi-pond,lantern-sky2
+.\Instalar-temas.ps1 -Biblioteca 'D:\Lively\Library' -Temas koi-pond,lantern-sky-clima-e-lua
 .\Instalar-temas.ps1 -Biblioteca 'D:\Lively\Library' -Temas todos -Atualizar
 ~~~
 
@@ -48,4 +48,13 @@ Para usar o Circuit Orbit com os seus ícones, siga a documentação de coleta d
 
 ## Autoria e licenças
 
-Os créditos de cada tema constam no respectivo `LivelyInfo.json`. As licenças de dependências acompanham os temas que as utilizam. O Lantern Sky original é de Dre e foi incluído com as adaptações de clima, astronomia e paisagem. As condições de redistribuição devem ser verificadas por tema antes de publicar a coleção.
+As contribuições originais de **Eduardo Mizael Clemente** estão sob a [licença MIT](LICENSE). Você pode usar, modificar, publicar e vender essas contribuições, desde que preserve o aviso de autoria e o texto da licença nas cópias ou em partes substanciais. O instalador inclui a licença e os créditos com cada tema.
+
+| Tema | Créditos e referências |
+| --- | --- |
+| [Circuit Orbit](circuit-orbit/README.md#créditos) | Fluidos de Pavel Dobryakov, a partir da adaptação de rocksdanister para o Lively. Marcadores derivados de Ori · Spirit Energy Spheres, com hash de David Hoskins. |
+| [Koi Pond](koi-pond/README.md#créditos) | Three.js e lil-gui. Ruído celular e cáusticas com referências de Inigo Quilez e *The Book of Shaders*. |
+| [Lantern Sky · Edição Clima e Lua](lantern-sky-clima-e-lua/README.md#créditos-e-licença) | Tema original de **Dre**, com adaptações de Eduardo Mizael Clemente. SunCalc de Vladimir Agafonkin e dados de Open-Meteo, WeatherAPI e RainViewer. |
+| [Ori · Spirit Energy Spheres](ori-energy-spheres/README.md#créditos) | Referência visual de *Ori and the Blind Forest*, desenvolvido pela Moon Studios e publicado pela Microsoft Studios. Hash de David Hoskins. |
+
+Os componentes de terceiros mantêm suas próprias licenças. O pacote original de Lantern Sky identifica Dre como autor, com o campo de licença em branco. A licença MIT desta coleção cobre as contribuições de Eduardo à edição, e a redistribuição do material original depende das condições de Dre.
