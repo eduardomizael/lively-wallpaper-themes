@@ -1,0 +1,2654 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tucunaré Azul · Visão Isométrica 3D</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #06252c;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #lagoon-canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .lil-gui.root {
+      --background-color: rgba(5, 28, 34, 0.80);
+      --text-color: #dff4f0;
+      --title-background-color: rgba(10, 48, 56, 0.88);
+      --title-text-color: #effbf8;
+      --widget-color: rgba(20, 82, 92, 0.65);
+      --hover-color: rgba(32, 114, 124, 0.82);
+      --focus-color: rgba(46, 146, 152, 0.92);
+      --number-color: #9be8b8;
+      --string-color: #f4be5e;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(130, 224, 205, 0.20);
+      border-radius: 6px;
+      top: 12px !important;
+      right: 12px !important;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    .lil-gui.hidden-gui {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="lagoon-canvas"></canvas>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/lil-gui.min.js"></script>
+  <script>
+    (() => {
+    // =========================================================================
+    // 1. CONFIGURAÇÃO GLOBAL (LIL-GUI + LIVELY WALLPAPER)
+    // =========================================================================
+    const urlParams = new URLSearchParams(window.location.search);
+    const isPreview = urlParams.has('preview');
+    const isInspect = urlParams.has('inspect'); // Modo inspeção de perfil para validação visual
+    const isInspectMouth = urlParams.has('mouth'); // Inspeção com a boca aberta
+
+    const params = {
+      baseSpeed: 1.85,          // Velocidade de patrulha do tucunaré
+      ambushTendency: 1.0,      // Frequência/duração de espairar/emboscada
+      causticsIntensity: 1.15,  // Intensidade das cáusticas
+      sunbeamsIntensity: 1.0,   // Intensidade dos raios de luz
+      fishScale: 1.08,          // Escala global do tucunaré
+      showAlgae: true,          // Exibir/ocultar algas no fundo
+      interactiveMouse: true,   // Espreita, fuga e isca ao clicar
+      showGui: isPreview && !isInspect,
+      dropBaitCenter: () => spawnBait((Math.random() - 0.5) * 8.0, (Math.random() - 0.5) * 2.8),
+      triggerStrike: () => triggerPredatorBurst(tucunare, 1.0)
+    };
+
+    // =========================================================================
+    // 2. RENDERER, CENA E CÂMERA LATERAL-ISOMÉTRICA
+    // =========================================================================
+    const canvas = document.getElementById('lagoon-canvas');
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: 'high-performance'
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a3b42);
+    scene.fog = new THREE.FogExp2(0x0b3d44, 0.0185);
+
+    // Câmera teleobjetiva inclinada (~19°): visão lateral-isométrica limpa e natural
+    const camera = new THREE.PerspectiveCamera(
+      25,
+      window.innerWidth / window.innerHeight,
+      0.5,
+      120
+    );
+    const CAM_BASE = isInspect
+      ? new THREE.Vector3(0, 3.2, 13.8)
+      : new THREE.Vector3(0, 7.2, 21.2);
+    const CAM_TARGET = isInspect
+      ? new THREE.Vector3(0, 0.0, 0)
+      : new THREE.Vector3(0, -0.35, 0);
+    camera.position.copy(CAM_BASE);
+    camera.lookAt(CAM_TARGET);
+
+    const swimVolume = {
+      halfX: 7.4,
+      minY: -1.40,
+      maxY: 1.50,
+      minZ: -2.8,
+      maxZ: 2.6
+    };
+
+    function updateBounds() {
+      const dist = CAM_BASE.distanceTo(CAM_TARGET);
+      const vFovRad = THREE.MathUtils.degToRad(camera.fov);
+      const visibleH = 2 * Math.tan(vFovRad * 0.5) * dist;
+      const visibleW = visibleH * camera.aspect;
+      swimVolume.halfX = Math.max(4.6, visibleW * 0.42);
+    }
+    updateBounds();
+
+    // =========================================================================
+    // 3. SHADERS DE ÁGUA, FUNDO ARENOSO, CÁUSTICAS E RAIOS DE LUZ
+    // =========================================================================
+    const MAX_RIPPLES = 18;
+    const rippleData = Array.from({ length: MAX_RIPPLES }, () => new THREE.Vector4(999, 999, -99, 0));
+    let rippleIndex = 0;
+
+    function spawnRipple(x, z, strength = 1.0) {
+      rippleData[rippleIndex].set(x, z, clockTime, strength);
+      rippleIndex = (rippleIndex + 1) % MAX_RIPPLES;
+    }
+
+    const CAUSTICS_GLSL = /* glsl */ `
+      vec2 hash22(vec2 p) {
+        p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+        return fract(sin(p) * 43758.5453123);
+      }
+
+      float voronoiCaustic(vec2 uv, float t) {
+        vec2 n = floor(uv);
+        vec2 f = fract(uv);
+        float md = 8.0;
+        float md2 = 8.0;
+        for (int j = -1; j <= 1; j++) {
+          for (int i = -1; i <= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 o = hash22(n + g);
+            o = 0.5 + 0.42 * sin(t + 6.2831 * o);
+            vec2 r = g + o - f;
+            float d = dot(r, r);
+            if (d < md) {
+              md2 = md;
+              md = d;
+            } else if (d < md2) {
+              md2 = d;
+            }
+          }
+        }
+        float edge = sqrt(md2) - sqrt(md);
+        return pow(clamp(1.0 - smoothstep(0.0, 0.24, edge), 0.0, 1.0), 2.1);
+      }
+
+      float layeredCaustics(vec2 worldXZ, float t) {
+        vec2 p1 = worldXZ * 0.36 + vec2(t * 0.042, -t * 0.028);
+        vec2 p2 = worldXZ * 0.55 + vec2(-t * 0.034, t * 0.039);
+        p1 += 0.16 * vec2(sin(worldXZ.y * 0.42 + t * 0.55), cos(worldXZ.x * 0.39 - t * 0.48));
+        p2 += 0.12 * vec2(cos(worldXZ.y * 0.54 - t * 0.50), sin(worldXZ.x * 0.48 + t * 0.45));
+        float c1 = voronoiCaustic(p1, t * 0.82);
+        float c2 = voronoiCaustic(p2 + vec2(3.7, 1.9), t * 1.02);
+        return c1 * 0.60 + c2 * 0.54 + (c1 * c2) * 0.90;
+      }
+
+      float rippleField(vec2 worldXZ, float t, vec4 ripples[18]) {
+        float sum = 0.0;
+        for (int i = 0; i < 18; i++) {
+          float age = t - ripples[i].z;
+          if (age > 0.0 && age < 4.0 && ripples[i].w > 0.001) {
+            float dist = length(worldXZ - ripples[i].xy);
+            float radius = age * 2.6;
+            float ring = exp(-pow((dist - radius) * 1.7, 2.0));
+            float wave = sin((dist - radius) * 10.5);
+            float fade = exp(-age * 1.1) * ripples[i].w;
+            sum += ring * (0.55 + 0.45 * wave) * fade;
+          }
+        }
+        return sum;
+      }
+    `;
+
+    // 3.1 Fundo aquático panorâmico
+    const backdropUniforms = {
+      uTime: { value: 0 },
+      uCausticsIntensity: { value: params.causticsIntensity }
+    };
+    const backdropMat = new THREE.ShaderMaterial({
+      uniforms: backdropUniforms,
+      depthWrite: false,
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uCausticsIntensity;
+        varying vec2 vUv;
+
+        float hash21(vec2 p) {
+          p = fract(p * vec2(123.34, 456.21));
+          p += dot(p, p + 45.32);
+          return fract(p.x * p.y);
+        }
+
+        float noise2(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+            mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+            f.y
+          );
+        }
+
+        void main() {
+          vec3 deepBottom = vec3(0.022, 0.145, 0.175);
+          vec3 midEmerald = vec3(0.062, 0.305, 0.325);
+          vec3 upperTurquoise = vec3(0.155, 0.495, 0.485);
+
+          vec3 col = mix(deepBottom, midEmerald, smoothstep(0.08, 0.56, vUv.y));
+          col = mix(col, upperTurquoise, smoothstep(0.54, 0.98, vUv.y));
+
+          // Bokeh suave de fundo subaquático (vegetação e reflexos distantes)
+          float bokeh1 = noise2(vec2(vUv.x * 7.2 + sin(uTime * 0.08) * 0.12, vUv.y * 4.2));
+          float bokeh2 = noise2(vec2(vUv.x * 13.5 - uTime * 0.018, vUv.y * 7.5));
+          float haze = smoothstep(0.14, 0.70, vUv.y) * (1.0 - smoothstep(0.75, 1.0, vUv.y));
+          col += vec3(0.07, 0.16, 0.14) * pow(bokeh1 * 0.65 + bokeh2 * 0.35, 2.0) * haze * 0.55;
+
+          float topGlow = pow(smoothstep(0.56, 1.0, vUv.y), 1.7);
+          col += vec3(0.14, 0.36, 0.35) * topGlow * (0.55 + 0.45 * uCausticsIntensity * 0.55);
+
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `
+    });
+    const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(86, 44), backdropMat);
+    backdrop.position.set(0, 2.5, -20);
+    backdrop.renderOrder = -10;
+    scene.add(backdrop);
+
+    // 3.2 Leito arenoso/cascalho com ondulações e cáusticas
+    const RIVERBED_Y = -3.2;
+    const riverbedUniforms = {
+      uTime: { value: 0 },
+      uCausticsIntensity: { value: params.causticsIntensity },
+      uRipples: { value: rippleData }
+    };
+
+    const riverbedGeo = new THREE.PlaneGeometry(78, 50, 88, 56);
+    riverbedGeo.rotateX(-Math.PI / 2);
+    const rbPos = riverbedGeo.attributes.position;
+    for (let i = 0; i < rbPos.count; i++) {
+      const x = rbPos.getX(i);
+      const z = rbPos.getZ(i);
+      const dune = Math.sin(x * 0.36 + z * 0.20) * 0.13 + Math.cos(x * 0.18 - z * 0.42) * 0.09;
+      rbPos.setY(i, dune);
+    }
+    riverbedGeo.computeVertexNormals();
+
+    const riverbedMat = new THREE.ShaderMaterial({
+      uniforms: riverbedUniforms,
+      depthWrite: true,
+      vertexShader: /* glsl */ `
+        varying vec3 vWorldPos;
+        varying vec3 vWorldNormal;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldPos = wp.xyz;
+          vWorldNormal = normalize(mat3(modelMatrix) * normal);
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uCausticsIntensity;
+        uniform vec4 uRipples[18];
+        varying vec3 vWorldPos;
+        varying vec3 vWorldNormal;
+
+        ${CAUSTICS_GLSL}
+
+        float hash21(vec2 p) {
+          p = fract(p * vec2(127.1, 311.7));
+          p += dot(p, p + 34.5);
+          return fract(p.x * p.y);
+        }
+
+        float valueNoise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+            mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+            f.y
+          );
+        }
+
+        void main() {
+          vec2 xz = vWorldPos.xz;
+          float n1 = valueNoise(xz * 0.55);
+          float n2 = valueNoise(xz * 1.9);
+          float grit = valueNoise(xz * 6.8) * 0.58 + valueNoise(xz * 15.0) * 0.42;
+
+          vec3 sandWarm = vec3(0.47, 0.53, 0.44);
+          vec3 sandCool = vec3(0.24, 0.39, 0.38);
+          vec3 siltDark = vec3(0.11, 0.23, 0.25);
+
+          vec3 base = mix(sandCool, sandWarm, n1 * 0.65 + n2 * 0.35);
+          base = mix(base, siltDark, smoothstep(0.62, 0.92, n2) * 0.42);
+          base *= (0.87 + 0.24 * grit);
+
+          vec3 L = normalize(vec3(-0.32, 1.0, 0.20));
+          float diff = 0.62 + 0.38 * max(dot(normalize(vWorldNormal), L), 0.0);
+          base *= diff;
+
+          float rip = rippleField(xz, uTime, uRipples);
+          vec2 refrXZ = xz + vec2(rip * 0.12, -rip * 0.10);
+          float cR = layeredCaustics(refrXZ + vec2(0.05, 0.02), uTime);
+          float cG = layeredCaustics(refrXZ, uTime);
+          float cB = layeredCaustics(refrXZ - vec2(0.05, 0.02), uTime);
+          vec3 causticCol = vec3(cR * 0.72, cG * 1.02, cB * 0.94);
+
+          float distCenter = length(xz * vec2(0.065, 0.095));
+          float lightPool = exp(-distCenter * distCenter * 0.92);
+          base += causticCol * 0.32 * (0.28 + 0.72 * lightPool) * uCausticsIntensity;
+          base += vec3(0.26, 0.58, 0.56) * rip * 0.22 * uCausticsIntensity;
+
+          float camDist = length(cameraPosition - vWorldPos);
+          float fogFactor = 1.0 - exp(-pow(camDist * 0.028, 2.0));
+          vec3 waterFog = vec3(0.042, 0.220, 0.250);
+          vec3 col = mix(base, waterFog, clamp(fogFactor, 0.0, 0.94));
+
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `
+    });
+    const riverbed = new THREE.Mesh(riverbedGeo, riverbedMat);
+    riverbed.position.y = RIVERBED_Y;
+    scene.add(riverbed);
+
+    // 3.3 Algas subaquáticas (Vallisneria / fita-d'água) balançando na correnteza (ligável/desligável)
+    const algaeUniforms = {
+      uTime: { value: 0 },
+      uCausticsIntensity: { value: params.causticsIntensity },
+      uFishPos: { value: new THREE.Vector3(0, 0, 0) }
+    };
+
+    function createAlgaeField() {
+      const positions = [];
+      const uvs = [];
+      const roots = [];
+      const paramsAttr = []; // (height, phase, tint)
+      const indices = [];
+
+      // Touceiras orgânicas distribuídas ao fundo e laterais, mantendo o centro livre para o tucunaré
+      const clusters = [
+        { x: -10.5, z: -5.8, count: 16, hMin: 1.8, hMax: 3.4 },
+        { x: -8.2,  z: -6.4, count: 18, hMin: 2.0, hMax: 3.8 },
+        { x: -5.4,  z: -6.9, count: 15, hMin: 1.7, hMax: 3.3 },
+        { x: -2.6,  z: -7.4, count: 14, hMin: 1.5, hMax: 2.9 },
+        { x:  0.8,  z: -7.6, count: 13, hMin: 1.6, hMax: 3.0 },
+        { x:  4.2,  z: -7.1, count: 16, hMin: 1.9, hMax: 3.6 },
+        { x:  7.4,  z: -6.2, count: 18, hMin: 2.0, hMax: 3.9 },
+        { x: 10.4,  z: -5.4, count: 15, hMin: 1.8, hMax: 3.4 },
+        // Touceiras menores nas bordas intermediárias para paralaxe isométrica
+        { x: -9.8,  z: -2.2, count: 10, hMin: 1.1, hMax: 2.1 },
+        { x: -8.6,  z:  1.4, count: 9,  hMin: 0.9, hMax: 1.7 },
+        { x:  9.6,  z: -2.0, count: 10, hMin: 1.2, hMax: 2.2 },
+        { x:  8.5,  z:  1.6, count: 9,  hMin: 0.9, hMax: 1.7 },
+        { x: -4.2,  z: -4.5, count: 8,  hMin: 1.0, hMax: 1.9 },
+        { x:  4.8,  z: -4.6, count: 9,  hMin: 1.1, hMax: 2.0 }
+      ];
+
+      let vertOffset = 0;
+      const segs = 10;
+
+      // Gerador determinístico simples para layout consistente
+      let seed = 1337;
+      const rand = () => {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+      };
+
+      clusters.forEach(cl => {
+        for (let b = 0; b < cl.count; b++) {
+          const ang = rand() * Math.PI * 2;
+          // Raízes mais agrupadas em touceiras naturais que abrem em leque para cima
+          const dist = Math.pow(rand(), 0.75) * 0.52;
+          const rx = cl.x + Math.cos(ang) * dist;
+          const rz = cl.z + Math.sin(ang) * dist * 0.72;
+          const ry = RIVERBED_Y + Math.sin(rx * 0.36 + rz * 0.20) * 0.13 + Math.cos(rx * 0.18 - rz * 0.42) * 0.09 - 0.06;
+
+          const height = cl.hMin + rand() * (cl.hMax - cl.hMin);
+          const baseWidth = 0.15 + rand() * 0.09;
+          const archDir = ang + (rand() - 0.5) * 0.8;
+          const yaw = rand() * Math.PI * 2;
+          const archStrength = 0.35 + rand() * 0.55;
+          const twistRate = (rand() - 0.5) * 1.4;
+          const phase = rand() * Math.PI * 2;
+          const tint = rand();
+
+          for (let s = 0; s <= segs; s++) {
+            const v = s / segs;
+            // Fita larga de Vallisneria que afina suavemente só no terço final
+            const w = baseWidth * (1.0 - Math.pow(v, 2.2) * 0.82);
+            // Curvatura graciosa em arco/S para fora da touceira
+            const archOut = (Math.pow(v, 1.55) * archStrength + Math.sin(v * Math.PI * 1.35) * 0.14) * height * 0.44;
+            const y = ry + v * height * (1.0 - 0.14 * archStrength * v * v);
+
+            const localYaw = yaw + twistRate * v;
+            const cosY = Math.cos(localYaw), sinY = Math.sin(localYaw);
+            const cx = rx + Math.cos(archDir) * archOut;
+            const cz = rz + Math.sin(archDir) * archOut * 0.75;
+
+            for (let side = 0; side < 2; side++) {
+              const u = side;
+              const localX = (side === 0 ? -0.5 : 0.5) * w;
+              const px = cx + localX * cosY;
+              const pz = cz + localX * sinY;
+
+              positions.push(px, y, pz);
+              uvs.push(u, v);
+              roots.push(rx, ry, rz);
+              paramsAttr.push(height, phase, tint);
+            }
+          }
+
+          for (let s = 0; s < segs; s++) {
+            const a = vertOffset + s * 2;
+            const b1 = a + 1;
+            const c = a + 2;
+            const d = a + 3;
+            indices.push(a, c, b1);
+            indices.push(b1, c, d);
+          }
+          vertOffset += (segs + 1) * 2;
+        }
+      });
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setAttribute('aRoot', new THREE.Float32BufferAttribute(roots, 3));
+      geo.setAttribute('aParams', new THREE.Float32BufferAttribute(paramsAttr, 3));
+      geo.setIndex(indices);
+
+      const mat = new THREE.ShaderMaterial({
+        uniforms: algaeUniforms,
+        side: THREE.DoubleSide,
+        transparent: true,
+        depthWrite: true,
+        vertexShader: /* glsl */ `
+          attribute vec3 aRoot;
+          attribute vec3 aParams;
+          uniform float uTime;
+          uniform vec3 uFishPos;
+
+          varying vec2 vUv;
+          varying vec3 vWorldPos;
+          varying float vTint;
+
+          void main() {
+            vUv = uv;
+            vTint = aParams.z;
+            float h = aParams.x;
+            float phase = aParams.y;
+            float v = uv.y;
+
+            vec3 p = position;
+            // Balanço fluido em múltiplas frequências simulando correnteza subaquática
+            float swayMain = sin(uTime * 1.15 + phase + v * 2.2) * 0.24;
+            float swayFine = sin(uTime * 2.35 + phase * 1.7 + v * 4.1) * 0.065;
+            float swayZ = cos(uTime * 0.92 + phase * 1.3 + v * 2.0) * 0.14;
+            float bend = v * v * (0.45 + 0.55 * (h / 3.0));
+            p.x += (swayMain + swayFine) * bend;
+            p.z += swayZ * bend;
+            // Compensa levemente a altura ao inclinar para manter o comprimento natural da folha
+            p.y -= abs(swayMain) * bend * 0.16;
+
+            // Leve afastamento na esteira quando o tucunaré passa perto
+            vec2 toBlade = p.xz - uFishPos.xz;
+            float fDist = length(toBlade);
+            if (fDist < 2.8 && fDist > 0.001) {
+              float push = (1.0 - fDist / 2.8) * 0.35 * v * v;
+              p.xz += (toBlade / fDist) * push;
+            }
+
+            vec4 wp = modelMatrix * vec4(p, 1.0);
+            vWorldPos = wp.xyz;
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uTime;
+          uniform float uCausticsIntensity;
+          varying vec2 vUv;
+          varying vec3 vWorldPos;
+          varying float vTint;
+
+          ${CAUSTICS_GLSL}
+
+          void main() {
+            // Borda levemente suave nas extremidades da fita
+            float edge = smoothstep(0.0, 0.14, vUv.x) * smoothstep(1.0, 0.86, vUv.x) * smoothstep(1.0, 0.92, vUv.y);
+            if (edge < 0.05) discard;
+
+            // Nervura central discreta e variação natural de verde-oliva/esmeralda amazônico
+            float vein = exp(-pow((vUv.x - 0.5) * 9.0, 2.0));
+            vec3 rootCol = vec3(0.08, 0.20, 0.14);
+            vec3 midCol = mix(vec3(0.14, 0.34, 0.19), vec3(0.22, 0.42, 0.20), vTint);
+            vec3 tipCol = mix(vec3(0.32, 0.54, 0.25), vec3(0.46, 0.62, 0.28), vTint);
+
+            vec3 col = mix(rootCol, midCol, smoothstep(0.0, 0.45, vUv.y));
+            col = mix(col, tipCol, smoothstep(0.42, 1.0, vUv.y));
+            col *= (0.90 + 0.18 * vein);
+
+            // Translucidez iluminada de cima + cáusticas suaves
+            float topLight = 0.55 + 0.45 * vUv.y;
+            col *= topLight;
+            float c = layeredCaustics(vWorldPos.xz * 0.95, uTime);
+            col += vec3(0.36, 0.78, 0.62) * c * 0.16 * uCausticsIntensity * (0.3 + 0.7 * vUv.y);
+
+            // Neblina subaquática combinando com o leito arenoso
+            float camDist = length(cameraPosition - vWorldPos);
+            float fogF = 1.0 - exp(-pow(camDist * 0.029, 2.0));
+            vec3 waterFog = vec3(0.042, 0.220, 0.250);
+            col = mix(col, waterFog, clamp(fogF, 0.0, 0.92));
+
+            gl_FragColor = vec4(col, edge * 0.94);
+          }
+        `
+      });
+
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.renderOrder = 2;
+      mesh.visible = params.showAlgae;
+      scene.add(mesh);
+      return mesh;
+    }
+
+    const algaeMesh = createAlgaeField();
+
+    // 3.4 Superfície da água superior
+    const waterSurfaceUniforms = {
+      uTime: { value: 0 },
+      uCausticsIntensity: { value: params.causticsIntensity },
+      uRipples: { value: rippleData }
+    };
+    const waterSurfaceMat = new THREE.ShaderMaterial({
+      uniforms: waterSurfaceUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      vertexShader: /* glsl */ `
+        varying vec2 vWorldXZ;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldXZ = wp.xz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uCausticsIntensity;
+        uniform vec4 uRipples[18];
+        varying vec2 vWorldXZ;
+
+        ${CAUSTICS_GLSL}
+
+        void main() {
+          float c = layeredCaustics(vWorldXZ * 0.95 + vec2(1.4, -1.2), uTime * 1.15);
+          float rip = rippleField(vWorldXZ, uTime, uRipples);
+          float distFade = exp(-dot(vWorldXZ * vec2(0.055, 0.075), vWorldXZ * vec2(0.055, 0.075)));
+          float shimmer = pow(c, 1.45) * 0.22 * uCausticsIntensity * distFade;
+          float ripGlow = rip * 0.28 * distFade;
+          vec3 col = vec3(0.45, 0.88, 0.86) * shimmer + vec3(0.65, 0.96, 0.94) * ripGlow;
+          gl_FragColor = vec4(col, clamp(shimmer + ripGlow, 0.0, 0.55));
+        }
+      `
+    });
+    const waterSurface = new THREE.Mesh(new THREE.PlaneGeometry(70, 40), waterSurfaceMat);
+    waterSurface.rotation.x = -Math.PI / 2;
+    waterSurface.position.y = 3.35;
+    waterSurface.renderOrder = 16;
+    scene.add(waterSurface);
+
+    // 3.5 Raios de luz solar volumétricos
+    const sunbeamUniforms = {
+      uTime: { value: 0 },
+      uIntensity: { value: params.sunbeamsIntensity }
+    };
+    const sunbeamMat = new THREE.ShaderMaterial({
+      uniforms: sunbeamUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uIntensity;
+        varying vec2 vUv;
+        void main() {
+          float beam = pow(max(0.0, sin(vUv.x * 3.14159)), 2.2);
+          float wave = 0.65 + 0.35 * sin(vUv.x * 9.0 + uTime * 0.52) * cos(vUv.y * 3.0 - uTime * 0.34);
+          float vertFade = smoothstep(0.0, 0.35, vUv.y) * smoothstep(1.0, 0.72, vUv.y);
+          float alpha = beam * wave * vertFade * 0.075 * uIntensity;
+          vec3 col = mix(vec3(0.28, 0.78, 0.76), vec3(0.70, 0.96, 0.86), vUv.y);
+          gl_FragColor = vec4(col, alpha);
+        }
+      `
+    });
+    [
+      { x: -7.5, y: 0.6, z: -6.5, w: 3.4, h: 11.5, rz: -0.24 },
+      { x: -3.2, y: 0.8, z: -5.2, w: 4.2, h: 12.0, rz: -0.22 },
+      { x: 1.4,  y: 0.7, z: -6.0, w: 3.8, h: 11.8, rz: -0.23 },
+      { x: 5.2,  y: 0.6, z: -7.2, w: 3.2, h: 11.2, rz: -0.25 }
+    ].forEach(b => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(b.w, b.h), sunbeamMat);
+      m.position.set(b.x, b.y, b.z);
+      m.rotation.z = b.rz;
+      m.renderOrder = 12;
+      scene.add(m);
+    });
+
+    // 3.6 Partículas subaquáticas em suspensão
+    const moteCount = 115;
+    const motePos = new Float32Array(moteCount * 3);
+    const moteSeed = new Float32Array(moteCount);
+    for (let i = 0; i < moteCount; i++) {
+      motePos[i * 3 + 0] = (Math.random() - 0.5) * 28;
+      motePos[i * 3 + 1] = -2.6 + Math.random() * 5.6;
+      motePos[i * 3 + 2] = -8.0 + Math.random() * 14.0;
+      moteSeed[i] = Math.random() * 6.2831;
+    }
+    const moteGeo = new THREE.BufferGeometry();
+    moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+    moteGeo.setAttribute('aSeed', new THREE.BufferAttribute(moteSeed, 1));
+    const moteUniforms = { uTime: { value: 0 }, uPixelRatio: { value: renderer.getPixelRatio() } };
+    const moteMat = new THREE.ShaderMaterial({
+      uniforms: moteUniforms,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: /* glsl */ `
+        attribute float aSeed;
+        uniform float uTime;
+        uniform float uPixelRatio;
+        varying float vAlpha;
+        void main() {
+          vec3 p = position;
+          p.x += sin(uTime * 0.22 + aSeed) * 0.42;
+          p.y += cos(uTime * 0.18 + aSeed * 1.4) * 0.24;
+          p.z += cos(uTime * 0.19 + aSeed * 0.9) * 0.35;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          gl_PointSize = (2.0 + 1.3 * sin(uTime * 0.75 + aSeed)) * uPixelRatio;
+          vAlpha = 0.09 + 0.09 * (0.5 + 0.5 * sin(uTime * 0.65 + aSeed * 2.0));
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        varying float vAlpha;
+        void main() {
+          float d = length(gl_PointCoord - 0.5);
+          float soft = smoothstep(0.5, 0.05, d);
+          gl_FragColor = vec4(0.70, 0.95, 0.89, soft * vAlpha);
+        }
+      `
+    });
+    scene.add(new THREE.Points(moteGeo, moteMat));
+
+    const hemiLight = new THREE.HemisphereLight(0xb2f4ea, 0x0e3438, 1.35);
+    scene.add(hemiLight);
+    const dirLight = new THREE.DirectionalLight(0xfff4dd, 1.25);
+    dirLight.position.set(-7, 16, 7);
+    scene.add(dirLight);
+
+    // =========================================================================
+    // 4. ANATOMIA 3D ESCULPIDA DO TUCUNARÉ AZUL (Cichla piquiti)
+    // =========================================================================
+    const HEAD_Z = 2.25;
+    const BODY_LEN = 4.40; // z de +2.25 (focinho) até -2.15 (raiz da cauda)
+
+    // Interpolação suave por tabela anatômica (Catmull-Rom 1D) para silhueta real de Tucunaré
+    function sampleProfile(table, t) {
+      const clamped = Math.max(0, Math.min(1, t));
+      let i = 0;
+      while (i < table.length - 2 && clamped > table[i + 1][0]) i++;
+      const p0 = table[Math.max(0, i - 1)];
+      const p1 = table[i];
+      const p2 = table[i + 1];
+      const p3 = table[Math.min(table.length - 1, i + 2)];
+      const span = Math.max(1e-5, p2[0] - p1[0]);
+      const u = (clamped - p1[0]) / span;
+      const u2 = u * u, u3 = u2 * u;
+      return 0.5 * (
+        (2 * p1[1]) +
+        (-p0[1] + p2[1]) * u +
+        (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * u2 +
+        (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * u3
+      );
+    }
+
+    // Perfil dorsal (+Y): focinho robusto de bass/tucunaré (sem ponta fina!), testa firme, dorso alto e pedúnculo esguio
+    const DORSAL_TABLE = [
+      [0.00, 0.09],
+      [0.03, 0.19],
+      [0.08, 0.29],
+      [0.15, 0.42],
+      [0.24, 0.57],
+      [0.34, 0.68],
+      [0.48, 0.66],
+      [0.62, 0.55],
+      [0.75, 0.36],
+      [0.85, 0.21],
+      [0.94, 0.175],
+      [1.00, 0.195]
+    ];
+
+    // Perfil ventral (-Y): queixo arredondado e forte, garganta cheia, ventre suave e pedúnculo recortado
+    const VENTRAL_TABLE = [
+      [0.00, 0.10],
+      [0.04, 0.22],
+      [0.11, 0.34],
+      [0.22, 0.46],
+      [0.36, 0.54],
+      [0.54, 0.50],
+      [0.68, 0.36],
+      [0.80, 0.20],
+      [0.94, 0.165],
+      [1.00, 0.185]
+    ];
+
+    // Largura lateral (X): focinho largo de predador, ombros musculosos e ponta traseira afinando na cauda
+    const WIDTH_TABLE = [
+      [0.00, 0.08],
+      [0.05, 0.18],
+      [0.15, 0.27],
+      [0.28, 0.35],
+      [0.44, 0.33],
+      [0.62, 0.235],
+      [0.78, 0.130],
+      [0.93, 0.062],
+      [0.985, 0.034],
+      [1.00, 0.012]
+    ];
+
+    const tucunareHeightUp = t => Math.max(0.02, sampleProfile(DORSAL_TABLE, t));
+    const tucunareHeightDown = t => Math.max(0.02, sampleProfile(VENTRAL_TABLE, t));
+    const tucunareWidth = t => Math.max(0.01, sampleProfile(WIDTH_TABLE, t));
+
+    function createTucunareBodyGeometry() {
+      const lengthSegs = 96;
+      const radialSegs = 44;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      for (let i = 0; i <= lengthSegs; i++) {
+        const t = i / lengthSegs;
+        const baseZ = HEAD_Z - t * BODY_LEN;
+        const rx = tucunareWidth(t);
+        const ryUp = tucunareHeightUp(t);
+        const ryDown = tucunareHeightDown(t);
+
+        for (let j = 0; j <= radialSegs; j++) {
+          const v = j / radialSegs;
+          const theta = v * Math.PI * 2.0;
+          const cosT = Math.cos(theta);
+          const sinT = Math.sin(theta);
+
+          // Seção em gota: dorso/ombros mais cheios, flancos esguios e quilha ventral firme
+          const xSign = Math.sign(cosT);
+          const upperFullness = sinT > 0 ? 1.0 + 0.08 * Math.sin(sinT * Math.PI) : 1.0 - 0.10 * Math.pow(-sinT, 1.3);
+          let x = xSign * Math.pow(Math.abs(cosT), 0.86) * rx * upperFullness;
+          let y = sinT >= 0 ? sinT * ryUp : sinT * ryDown;
+          let z = baseZ;
+
+          // Fechamento arredondado do focinho na ponta frontal (evita tubo cortado!)
+          if (t < 0.04) {
+            const cap = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(1.0 - t / 0.04, 2.0)));
+            x *= (0.35 + 0.65 * cap);
+            y *= (0.45 + 0.55 * cap);
+          }
+
+          // Mandíbula inferior prognata natural (lábio grosso e levemente avançado, SEM bico pontudo!)
+          if (t < 0.12 && sinT < 0.05) {
+            const jawU = Math.pow(1.0 - t / 0.12, 1.45);
+            const lowerMask = THREE.MathUtils.smoothstep(-sinT, -0.05, 0.55);
+            z += 0.072 * jawU * lowerMask;
+            y += 0.018 * jawU * lowerMask;
+          }
+
+          // Relevo do opérculo (tampa branquial) em t ~ 0.23..0.29
+          if (t > 0.20 && t < 0.31 && Math.abs(sinT) < 0.72) {
+            const opercBell = Math.exp(-Math.pow((t - 0.255) / 0.028, 2.0));
+            const vertMask = Math.cos(sinT * Math.PI * 0.65);
+            x += xSign * 0.024 * opercBell * Math.max(0, vertMask);
+          }
+
+          // Cavidade orbital natural para encaixar o olho na cabeça (z ~ 1.56, y ~ 0.18)
+          const dEyeZ = (z - 1.56) / 0.15;
+          const dEyeY = (y - 0.18) / 0.13;
+          const eyeDistSq = dEyeZ * dEyeZ + dEyeY * dEyeY;
+          if (eyeDistSq < 1.35 && Math.abs(cosT) > 0.45) {
+            const socket = Math.exp(-eyeDistSq * 2.2) * THREE.MathUtils.smoothstep(Math.abs(cosT), 0.45, 0.82);
+            x -= xSign * 0.040 * socket;
+          }
+
+          positions.push(x, y, z);
+          uvs.push(t, v);
+        }
+      }
+
+      const stride = radialSegs + 1;
+      for (let i = 0; i < lengthSegs; i++) {
+        for (let j = 0; j < radialSegs; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Cauda vertical arredondada/truncada com encaixe contínuo no pedúnculo
+    function createCaudalFinGeometry() {
+      const segU = 28;
+      const segV = 26;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      const baseZ = -1.94; // Sobrepõe suavemente o final do pedúnculo (-2.15) para junção sem emenda
+      const tailLen = 1.54;
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const side = (v - 0.5) * 2.0; // -1 inferior, +1 superior
+          const absSide = Math.abs(side);
+
+          const spreadY = 0.175 + Math.pow(u, 0.70) * 0.54;
+          const cornerRound = 0.22 * Math.pow(absSide, 2.35) * u;
+          const rearCurve = -0.045 * (1.0 - absSide * absSide) * Math.pow(u, 1.3);
+
+          const z = baseZ - u * tailLen + cornerRound + rearCurve;
+          const y = side * spreadY;
+          // Ligeira curvatura 3D suave na membrana (evita parecer papel rígido)
+          const x = Math.sin(v * Math.PI * 2.0) * 0.012 * u;
+
+          positions.push(x, y, z);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Dorsal Anterior Espinhosa (14 espinhos individuais com membrana recortada + entalhe final)
+    function createSpinyDorsalGeometry() {
+      const segU = 56;
+      const segV = 10;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      const startZ = 0.72;
+      const endZ = -0.44;
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const z = THREE.MathUtils.lerp(startZ, endZ, u);
+        const tBody = (HEAD_Z - z) / BODY_LEN;
+        const baseY = tucunareHeightUp(tBody) * 0.88;
+
+        // Sobe rápido nos primeiros espinhos, mantém crista imponente e faz o entalhe característico antes da dorsal mole
+        const frontRise = THREE.MathUtils.smoothstep(u, 0.0, 0.14);
+        const rearNotch = 1.0 - 0.72 * Math.pow(THREE.MathUtils.smoothstep(u, 0.58, 1.0), 1.3);
+        const envelope = (0.14 + 0.37 * frontRise) * rearNotch;
+
+        // 14 espinhos serrilhados com membrana côncava entre as pontas
+        const spinePhase = (u * 14.0) % 1.0;
+        const scallop = 0.82 + 0.18 * Math.pow(Math.abs(spinePhase * 2.0 - 1.0), 1.4);
+        const finHeight = envelope * scallop;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          positions.push(0, baseY + v * finHeight, z - v * (0.20 + 0.12 * u));
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Dorsal Posterior Mole (leque arredondado iridescente azulado com pintas)
+    function createSoftDorsalGeometry() {
+      const segU = 26;
+      const segV = 10;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      const startZ = -0.42;
+      const endZ = -1.46;
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const z = THREE.MathUtils.lerp(startZ, endZ, u);
+        const tBody = (HEAD_Z - z) / BODY_LEN;
+        const baseY = tucunareHeightUp(tBody) * 0.86;
+        const finHeight = Math.sin(Math.pow(u, 0.72) * Math.PI) * 0.50 + 0.04;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const sweep = v * (0.28 + 0.22 * u);
+          positions.push(0, baseY + v * finHeight, z - sweep);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Nadadeira Anal (arredondada, base âmbar + borda azul iridescente com pintas)
+    function createAnalFinGeometry() {
+      const segU = 22;
+      const segV = 10;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      const startZ = -0.52;
+      const endZ = -1.46;
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const z = THREE.MathUtils.lerp(startZ, endZ, u);
+        const tBody = (HEAD_Z - z) / BODY_LEN;
+        const baseY = -tucunareHeightDown(tBody) * 0.85;
+        const finDepth = Math.sin(Math.pow(u, 0.72) * Math.PI) * 0.45 + 0.04;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          positions.push(0, baseY - v * finDepth, z - v * (0.26 + 0.20 * u));
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, d, b);
+          indices.push(b, d, c);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Peitorais translúcidas em leque alongado e curvado ao longo do flanco
+    function createPectoralFinGeometry(sideSign) {
+      const segU = 18;
+      const segV = 12;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const heightSpan = 0.14 + Math.sin(Math.pow(u, 0.66) * Math.PI) * 0.42 + 0.05 * u;
+        const reachX = Math.pow(u, 0.85) * 0.58;
+        const sweepBack = Math.pow(u, 1.02) * 0.82;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const cup = Math.sin(v * Math.PI) * 0.06 * u;
+          const localX = sideSign * (reachX + cup);
+          const localY = (0.42 - v) * heightSpan - u * 0.18;
+          const localZ = -sweepBack + (0.5 - v) * 0.14 * u;
+          positions.push(localX, localY, localZ);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          if (sideSign > 0) {
+            indices.push(a, d, b);
+            indices.push(b, d, c);
+          } else {
+            indices.push(a, b, d);
+            indices.push(b, c, d);
+          }
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Pélvicas inferiores bem formadas (leque ventral curvado para trás, sem parecer fio fino)
+    function createPelvicFinGeometry(sideSign) {
+      const segU = 12;
+      const segV = 8;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const chord = 0.14 + Math.sin(Math.pow(u, 0.62) * Math.PI) * 0.36;
+        const reachX = u * 0.14;
+        const dropY = -Math.pow(u, 0.85) * 0.40;
+        const sweepBack = Math.pow(u, 1.05) * 0.72;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          positions.push(
+            sideSign * (reachX + (0.5 - v) * 0.03),
+            dropY + (0.5 - v) * chord * 0.68,
+            -sweepBack - v * chord * 0.42
+          );
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          if (sideSign > 0) {
+            indices.push(a, d, b);
+            indices.push(b, d, c);
+          } else {
+            indices.push(a, b, d);
+            indices.push(b, c, d);
+          }
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    const sharedGeos = {
+      body: createTucunareBodyGeometry(),
+      caudal: createCaudalFinGeometry(),
+      spinyDorsal: createSpinyDorsalGeometry(),
+      softDorsal: createSoftDorsalGeometry(),
+      anal: createAnalFinGeometry(),
+      pectL: createPectoralFinGeometry(1),
+      pectR: createPectoralFinGeometry(-1),
+      pelvL: createPelvicFinGeometry(1),
+      pelvR: createPelvicFinGeometry(-1),
+      eyeL: new THREE.SphereGeometry(0.094, 18, 14).scale(0.60, 1.0, 1.0),
+      eyeR: new THREE.SphereGeometry(0.094, 18, 14).scale(0.60, 1.0, 1.0)
+    };
+
+    const pectLPivot = new THREE.Vector3(0.30, -0.15, 0.96);
+    const pectRPivot = new THREE.Vector3(-0.30, -0.15, 0.96);
+    const pelvLPivot = new THREE.Vector3(0.09, -0.45, 0.66);
+    const pelvRPivot = new THREE.Vector3(-0.09, -0.45, 0.66);
+    const eyeLPos = new THREE.Vector3(0.215, 0.18, 1.56);
+    const eyeRPos = new THREE.Vector3(-0.215, 0.18, 1.56);
+
+    // =========================================================================
+    // 5. SHADERS REALISTAS DO TUCUNARÉ AZUL (ESCAMAS COM BUMP + IRIDESCÊNCIA + 5 BARRAS + OCELO)
+    // =========================================================================
+    const globalFishUniforms = {
+      uTime: { value: 0 },
+      uCausticsIntensity: { value: params.causticsIntensity }
+    };
+
+    const FISH_DEFORM_GLSL = /* glsl */ `
+      uniform float uSwimPhase;
+      uniform float uTailAmp;
+      uniform float uSpineCurve;
+      uniform float uBreathPhase;
+      uniform float uIdleDriftPhase;
+      uniform float uMouthOpen;
+
+      float spineOffsetX(float z) {
+        float s = clamp((2.25 - z) / 5.95, 0.0, 1.0);
+        // Propulsão subcarangiforme: cabeça firme de predador, onda cresce a partir do meio do corpo
+        float wave = sin(uSwimPhase - s * 4.9);
+        float amp = uTailAmp * (0.006 + 0.994 * pow(max(0.0, s - 0.10) / 0.90, 2.05));
+        float swimX = wave * amp;
+
+        // Micro-ondulação sedosa só na ponta traseira mesmo quando quase parado
+        float idleDrift = sin(uIdleDriftPhase - s * 3.2) * 0.035 * pow(s, 2.6);
+
+        float ds = s - 0.25;
+        float bendX = uSpineCurve * (ds * ds) * 2.45;
+        return swimX + idleDrift + bendX;
+      }
+
+      vec3 deformFishPosition(vec3 p) {
+        // Respiração branquial suave no opérculo + expansão bucal ao dar o bote (sucção!)
+        float gillMask = exp(-pow((p.z - 1.22) * 4.2, 2.0));
+        p.x *= (1.0 + gillMask * (0.042 * sin(uBreathPhase) + 0.11 * uMouthOpen));
+
+        // Abertura articulada da boca para comer (mandíbula inferior gira na articulação + pré-maxila avança!)
+        float mouthLineY = -0.15 + (p.z - 1.58) * 0.24;
+        float jawRegion = smoothstep(1.50, 1.76, p.z);
+        if (uMouthOpen > 0.001 && jawRegion > 0.001) {
+          vec2 hinge = vec2(1.52, -0.15);
+          vec2 rel = vec2(p.z - hinge.x, p.y - hinge.y);
+          float isLower = smoothstep(0.03, -0.04, p.y - mouthLineY);
+          float isUpper = smoothstep(-0.03, 0.05, p.y - mouthLineY);
+
+          // Mandíbula inferior abre para baixo (~30° no pico do bote)
+          float angLow = uMouthOpen * 0.50 * jawRegion * isLower;
+          float cL = cos(angLow), sL = sin(angLow);
+          vec2 rotLow = vec2(rel.x * cL + rel.y * sL, -rel.x * sL + rel.y * cL);
+
+          // Maxila superior projeta levemente para frente e inclina para cima (protrusão real de Cichla!)
+          float angUp = uMouthOpen * 0.14 * jawRegion * isUpper;
+          float cU = cos(angUp), sU = sin(angUp);
+          vec2 rotUp = vec2(rel.x * cU - rel.y * sU + 0.055 * uMouthOpen * jawRegion * isUpper, rel.x * sU + rel.y * cU);
+
+          vec2 blended = mix(rel, rotLow, isLower);
+          blended = mix(blended, rotUp, isUpper);
+          // Recua o miolo entre os lábios para dentro criando profundidade real da cavidade bucal
+          float cavityRecess = exp(-pow((p.y - mouthLineY) / 0.055, 2.0)) * smoothstep(1.68, 2.15, p.z) * uMouthOpen;
+          p.z = hinge.x + blended.x - cavityRecess * 0.26;
+          p.y = hinge.y + blended.y;
+        } else {
+          // Leve movimento rítmico da mandíbula inferior ao respirar
+          float mouthMask = smoothstep(1.75, 2.25, p.z) * smoothstep(0.02, -0.14, p.y);
+          p.y -= mouthMask * (0.016 * (0.5 + 0.5 * sin(uBreathPhase - 0.7)));
+        }
+
+        p.x += spineOffsetX(p.z);
+        return p;
+      }
+
+      vec3 deformFishNormal(vec3 p, vec3 n) {
+        float eps = 0.06;
+        float dx = spineOffsetX(p.z + eps) - spineOffsetX(p.z - eps);
+        float angle = atan(dx / (2.0 * eps));
+        float c = cos(angle);
+        float s = sin(angle);
+        return normalize(vec3(n.x * c + n.z * s, n.y, -n.x * s + n.z * c));
+      }
+    `;
+
+    function createTucunareBodyMaterial(fishUniforms) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...globalFishUniforms,
+          ...fishUniforms
+        },
+        vertexShader: /* glsl */ `
+          varying vec3 vObjPos;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${FISH_DEFORM_GLSL}
+
+          void main() {
+            vObjPos = position;
+            vec3 deformedPos = deformFishPosition(position);
+            vec3 deformedNorm = deformFishNormal(position, normal);
+
+            vec4 wp = modelMatrix * vec4(deformedPos, 1.0);
+            vWorldPos = wp.xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * deformedNorm);
+
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uTime;
+          uniform float uCausticsIntensity;
+          uniform float uMouthOpen;
+          varying vec3 vObjPos;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${CAUSTICS_GLSL}
+
+          float hash21(vec2 p) {
+            p = fract(p * vec2(123.34, 456.21));
+            p += dot(p, p + 45.32);
+            return fract(p.x * p.y);
+          }
+
+          float noise2D(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            float a = hash21(i);
+            float b = hash21(i + vec2(1.0, 0.0));
+            float c = hash21(i + vec2(0.0, 1.0));
+            float d = hash21(i + vec2(1.0, 1.0));
+            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+          }
+
+          float fbm(vec2 p) {
+            float v = 0.0;
+            float a = 0.52;
+            mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
+            for (int i = 0; i < 4; i++) {
+              v += a * noise2D(p);
+              p = rot * p * 2.05;
+              a *= 0.5;
+            }
+            return v;
+          }
+
+          // Escamas imbricadas (sobrepostas em meia-lua/diamante) retornando (altura, brilho, borda)
+          vec3 fishScalePattern(vec2 uv) {
+            vec2 g1 = uv;
+            vec2 f1 = fract(g1) - vec2(0.5, 0.5);
+            vec2 id1 = floor(g1);
+
+            vec2 g2 = uv + vec2(0.5, 0.5);
+            vec2 f2 = fract(g2) - vec2(0.5, 0.5);
+            vec2 id2 = floor(g2);
+
+            // Escama sobreposta: escolhe a célula cujo centro está mais próximo (formato em arco)
+            float d1 = length(f1 * vec2(1.05, 0.92));
+            float d2 = length(f2 * vec2(1.05, 0.92));
+            bool useFirst = d1 < d2;
+            vec2 f = useFirst ? f1 : f2;
+            vec2 id = useFirst ? id1 : id2;
+            float d = useFirst ? d1 : d2;
+
+            float height = smoothstep(0.56, 0.14, d) * (0.75 + 0.25 * (0.5 - f.x));
+            float rim = smoothstep(0.49, 0.36, d) - smoothstep(0.36, 0.24, d);
+            float randVal = hash21(id * 1.37 + vec2(4.1, 2.7));
+            return vec3(height, randVal, rim);
+          }
+
+          void main() {
+            vec3 Ngeom = normalize(vWorldNormal);
+            vec3 V = normalize(cameraPosition - vWorldPos);
+            vec3 L = normalize(vec3(-0.28, 0.92, 0.44));
+
+            float t = clamp((2.25 - vObjPos.z) / 4.40, 0.0, 1.0);
+            float h = clamp(vObjPos.y / 0.66, -1.0, 1.0);
+
+            // Mapeamento de escamas: maiores no flanco, mais finas no pedúnculo e quase lisas no focinho
+            float headSmooth = smoothstep(0.29, 0.14, t);
+            float scaleDensity = mix(11.5, 16.0, smoothstep(0.65, 0.98, t));
+            vec2 scaleUv = vec2(vObjPos.z * scaleDensity, vObjPos.y * (scaleDensity * 1.15));
+            vec3 sc = fishScalePattern(scaleUv);
+            float scaleAmt = mix(1.0, 0.18, headSmooth);
+
+            // Bump mapping real por escama usando derivadas de tela (dFdx/dFdy) -> luz cintilante em cada escama!
+            float bumpH = sc.x * 0.042 * scaleAmt;
+            vec3 dPdx = dFdx(vWorldPos);
+            vec3 dPdy = dFdy(vWorldPos);
+            float dHdx = dFdx(bumpH);
+            float dHdy = dFdy(bumpH);
+            vec3 surfGrad = normalize(cross(dPdy, Ngeom)) * dHdx + normalize(cross(Ngeom, dPdx)) * dHdy;
+            vec3 N = normalize(Ngeom - surfGrad * 9.5);
+
+            // Paleta realista de Tucunaré Azul (Cichla piquiti)
+            vec3 dorsalOlive = vec3(0.16, 0.23, 0.12);
+            vec3 upperBronze = vec3(0.34, 0.43, 0.20);
+            vec3 flankGoldGreen = vec3(0.54, 0.63, 0.30);
+            vec3 lowerSilverGold = vec3(0.74, 0.78, 0.62);
+            vec3 bellyPearl = vec3(0.86, 0.87, 0.78);
+            vec3 cheekGold = vec3(0.64, 0.69, 0.22);
+            vec3 jawAmber = vec3(0.78, 0.56, 0.22);
+
+            float macroVar = fbm(vec2(vObjPos.z * 2.1, vObjPos.y * 2.8));
+            vec3 albedo = mix(flankGoldGreen, upperBronze, smoothstep(0.12, 0.55, h));
+            albedo = mix(albedo, dorsalOlive, smoothstep(0.45, 0.88, h));
+            albedo = mix(albedo, lowerSilverGold, smoothstep(-0.08, -0.48, h));
+            albedo = mix(albedo, bellyPearl, smoothstep(-0.42, -0.84, h));
+
+            // Bochecha e cabeça verde-dourado metálico + queixo levemente dourado/âmbar
+            albedo = mix(albedo, cheekGold, headSmooth * smoothstep(-0.55, 0.32, h) * 0.62);
+            float chinMask = smoothstep(0.28, 0.04, t) * smoothstep(-0.18, -0.70, h);
+            albedo = mix(albedo, jawAmber, chinMask * 0.44);
+
+            // Brilho individual por escama (mosaico dourado-esverdeado cintilante entre as barras)
+            float flankZone = smoothstep(-0.42, 0.05, h) * smoothstep(0.78, 0.22, h) * smoothstep(0.22, 0.34, t);
+            vec3 scaleFlashCol = mix(vec3(0.92, 0.96, 0.74), vec3(0.55, 0.88, 0.94), smoothstep(0.58, 0.95, t));
+            albedo = mix(albedo, scaleFlashCol, sc.x * smoothstep(0.52, 0.86, sc.y) * flankZone * 0.42);
+
+            // 5 barras verticais orgânicas do Tucunaré Azul descendo desde o topo do dorso (não ovais flutuantes!)
+            float warpZ = (fbm(vec2(vObjPos.z * 3.0, vObjPos.y * 2.4)) - 0.5) * 0.13;
+            float zW = vObjPos.z + warpZ;
+            // Mais largas no dorso e afinando suavemente em cunha para baixo
+            float barW = mix(0.085, 0.22, smoothstep(-0.45, 0.75, h));
+
+            float barNape = exp(-pow((zW - 1.24) / 0.15, 2.0)) * smoothstep(0.18, 0.52, h) * 0.85;
+            float bar1    = exp(-pow((zW - 0.68) / (barW * 1.00), 2.0)) * 1.00;
+            float bar2    = exp(-pow((zW - 0.06) / (barW * 1.04), 2.0)) * 1.00;
+            float bar3    = exp(-pow((zW + 0.58) / (barW * 0.96), 2.0)) * 0.96;
+            float bar4    = exp(-pow((zW + 1.18) / (barW * 0.80), 2.0)) * 0.72;
+            float bar5    = exp(-pow((zW + 1.68) / (barW * 0.68), 2.0)) * 0.52;
+            float gillSpot = exp(-pow((vObjPos.z - 1.04) / 0.065, 2.0)) * exp(-pow((vObjPos.y + 0.04) / 0.13, 2.0)) * 0.68;
+
+            // Sólidas até o topo do dorso, esmaecendo organicamente abaixo da linha média
+            float vertFade = smoothstep(-0.42, 0.10, h);
+            float rawBars = max(max(bar1, bar2), max(bar3, max(bar4, bar5))) * vertFade;
+            float barMask = clamp(max(rawBars, max(barNape, gillSpot)), 0.0, 1.0);
+            barMask = smoothstep(0.24, 0.70, barMask);
+
+            vec3 barDark = vec3(0.065, 0.082, 0.075) * (0.86 + 0.24 * macroVar);
+            albedo = mix(albedo, barDark, barMask * 0.82);
+
+            // Sombra sutil ao redor da cavidade orbital para integrar o olho na cabeça
+            float eyeHalo = exp(-pow((vObjPos.z - 1.56) / 0.13, 2.0)) * exp(-pow((vObjPos.y - 0.18) / 0.12, 2.0));
+            albedo *= (1.0 - eyeHalo * 0.34);
+
+            // Escurecimento sutil da linha lateral arqueada
+            float latLineY = 0.22 * sin(clamp((t - 0.22) / 0.55, 0.0, 1.0) * 3.14159) + 0.04;
+            float latLine = exp(-pow((vObjPos.y - latLineY) * 42.0, 2.0)) * smoothstep(0.24, 0.30, t) * smoothstep(0.96, 0.82, t);
+            albedo *= (1.0 - latLine * 0.20);
+
+            // Detalhes anatômicos da cabeça: opérculo, pré-opérculo, boca e narina
+            float opercCurve = 1.12 - 0.22 * pow(h + 0.04, 2.0);
+            float opercEdge = exp(-pow((vObjPos.z - opercCurve) * 28.0, 2.0)) * smoothstep(-0.72, -0.35, h) * smoothstep(0.62, 0.24, h);
+            float preOperc = exp(-pow((vObjPos.z - (opercCurve + 0.22)) * 34.0, 2.0)) * smoothstep(-0.62, -0.25, h) * smoothstep(0.18, -0.05, h);
+            albedo *= (1.0 - opercEdge * 0.48 - preOperc * 0.20);
+
+            // Fenda da boca de predador + cavidade bucal escura quando abre a boca para comer!
+            float mouthY = -0.15 + (vObjPos.z - 1.58) * 0.24;
+            float mouthCleft = exp(-pow((vObjPos.y - mouthY) * 34.0, 2.0)) * smoothstep(1.50, 1.68, vObjPos.z);
+            albedo *= (1.0 - mouthCleft * 0.58);
+            if (uMouthOpen > 0.02) {
+              float cavityHalf = mix(0.02, 0.085, uMouthOpen);
+              float inCavity = smoothstep(cavityHalf, cavityHalf * 0.25, abs(vObjPos.y - mouthY)) * smoothstep(1.56, 1.82, vObjPos.z);
+              albedo = mix(albedo, vec3(0.045, 0.022, 0.028), inCavity * smoothstep(0.02, 0.35, uMouthOpen) * 0.94);
+            }
+
+            // Narina discreta à frente do olho
+            float nostril = exp(-pow((vObjPos.z - 1.88) / 0.030, 2.0)) * exp(-pow((vObjPos.y - 0.16) / 0.026, 2.0));
+            albedo *= (1.0 - nostril * 0.50);
+
+            // Sombra sutil nas bordas das escamas
+            albedo *= mix(1.0, 0.90 + 0.14 * sc.x - 0.08 * sc.z, scaleAmt);
+
+            // Iluminação física natural + Iridescência azul-turquesa sem excesso de brilho plástico
+            float NdotV = max(dot(N, V), 0.0);
+            float fresnel = pow(1.0 - NdotV, 2.8);
+            float diff = max(dot(N, L), 0.0);
+            vec3 hemi = mix(vec3(0.09, 0.25, 0.27), vec3(0.74, 0.93, 0.88), N.y * 0.5 + 0.5);
+            vec3 lighting = hemi * 0.56 + vec3(1.0, 0.97, 0.88) * diff * 0.72;
+
+            vec3 H = normalize(L + V);
+            float specBroad = pow(max(dot(N, H), 0.0), 26.0) * 0.18;
+            float specSharp = pow(max(dot(N, H), 0.0), 92.0) * (0.28 + 0.32 * sc.x * scaleAmt);
+
+            vec3 blueIridescence = vec3(0.16, 0.62, 0.86);
+            float iridZone = 0.32 + 0.68 * smoothstep(0.30, 0.85, t);
+            vec3 color = albedo * lighting;
+            color += vec3(0.92, 0.96, 0.82) * (specBroad + specSharp);
+            color += mix(vec3(0.42, 0.82, 0.78), blueIridescence, iridZone) * fresnel * 0.30;
+
+            // Cáusticas subaquáticas dançando sobre o dorso e flancos
+            float c = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
+            float causticMask = smoothstep(-0.22, 0.72, Ngeom.y);
+            color += vec3(0.45, 0.90, 0.84) * c * 0.26 * uCausticsIntensity * causticMask;
+
+            // Absorção natural da água pela distância à câmera
+            float camDist = length(cameraPosition - vWorldPos);
+            float waterAbsorb = clamp((camDist - 14.0) * 0.017, 0.03, 0.26);
+            color = mix(color, vec3(0.06, 0.29, 0.32), waterAbsorb);
+
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `
+      });
+    }
+
+    // Olho realista com íris fibrosa dourada/vermelho-âmbar, pupila profunda e córnea úmida
+    function createEyeMaterial(fishUniforms, sideSign, eyeOffset) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...fishUniforms,
+          uSideSign: { value: sideSign },
+          uEyeOffset: { value: eyeOffset.clone() }
+        },
+        vertexShader: /* glsl */ `
+          uniform vec3 uEyeOffset;
+          varying vec3 vLocalNorm;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+          ${FISH_DEFORM_GLSL}
+          void main() {
+            vLocalNorm = normalize(normal);
+            vec3 p = position + uEyeOffset;
+            vec3 dp = deformFishPosition(p);
+            vec3 dn = deformFishNormal(p, normal);
+            vec4 wp = modelMatrix * vec4(dp, 1.0);
+            vWorldPos = wp.xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * dn);
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uSideSign;
+          varying vec3 vLocalNorm;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+          void main() {
+            vec3 nLoc = normalize(vLocalNorm);
+            vec3 gazeDir = normalize(vec3(uSideSign * 0.95, 0.06, 0.28));
+            float align = dot(nLoc, gazeDir);
+            float r = acos(clamp(align, -1.0, 1.0));
+            float ang = atan(nLoc.y, nLoc.z);
+            float fibers = 0.86 + 0.14 * sin(ang * 22.0);
+
+            vec3 socketRim = vec3(0.18, 0.24, 0.12);
+            vec3 irisOuter = vec3(0.62, 0.22, 0.06) * fibers;
+            vec3 irisGold  = vec3(0.92, 0.68, 0.22) * fibers;
+            vec3 pupil     = vec3(0.015, 0.02, 0.025);
+
+            vec3 col = socketRim;
+            col = mix(col, irisOuter, smoothstep(0.92, 0.62, r));
+            col = mix(col, irisGold, smoothstep(0.54, 0.42, r));
+            col = mix(col, pupil, smoothstep(0.42, 0.34, r));
+
+            vec3 N = normalize(vWorldNormal);
+            vec3 V = normalize(cameraPosition - vWorldPos);
+            vec3 L = normalize(vec3(-0.28, 0.92, 0.44));
+            float diff = 0.50 + 0.50 * max(dot(N, L), 0.0);
+            float spec = pow(max(dot(N, normalize(L + V)), 0.0), 110.0) * 1.15;
+            gl_FragColor = vec4(col * diff + vec3(spec), 1.0);
+          }
+        `
+      });
+    }
+
+    // Nadadeiras do Tucunaré Azul com relevo de raios, brilho azul-turquesa, pintas peroladas e ocelo
+    function createTucunareFinMaterial(fishUniforms, finType, sideSign = 0, pivot = new THREE.Vector3()) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...globalFishUniforms,
+          ...fishUniforms,
+          uFinType: { value: finType },
+          uSideSign: { value: sideSign },
+          uPivot: { value: pivot.clone() }
+        },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        vertexShader: /* glsl */ `
+          uniform int uFinType;
+          uniform float uSideSign;
+          uniform vec3 uPivot;
+          uniform float uPectoralSpread;
+          uniform float uPectoralRowL;
+          uniform float uPectoralRowR;
+          uniform float uDorsalFlare;
+          uniform float uTime;
+
+          varying vec2 vUv;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${FISH_DEFORM_GLSL}
+
+          void main() {
+            vUv = uv;
+            vec3 p = position;
+            vec3 n = normal;
+
+            if (uFinType == 0) {
+              // Cauda: chicote fluido + leve atraso nas pontas superior/inferior
+              float edgeLag = abs(uv.y - 0.5) * 0.45;
+              float whip = sin(uSwimPhase - 4.7 - uv.x * 2.15 - edgeLag) * (uTailAmp * 0.30) * pow(uv.x, 1.45);
+              float silkTip = sin(uIdleDriftPhase - uv.x * 2.8 - uv.y * 1.8) * 0.032 * pow(uv.x, 1.8);
+              p.x += whip + silkTip;
+            } else if (uFinType == 1) {
+              // Dorsal espinhosa: ergue em alerta/espreita e relaxa no cruzeiro
+              float flareScale = mix(0.56, 1.06, uDorsalFlare);
+              float baseY = p.y - uv.y * 0.45;
+              p.y = mix(p.y, baseY + uv.y * 0.45 * flareScale, uv.y);
+              float sBody = clamp((2.25 - p.z) / 5.95, 0.0, 1.0);
+              p.x += sin(uSwimPhase - sBody * 4.9 - uv.y * 0.7) * (uTailAmp * 0.14 + 0.015) * uv.y;
+            } else if (uFinType == 2 || uFinType == 3) {
+              // Dorsal mole e anal: ondulação suave na membrana
+              float sBody = clamp((2.25 - p.z) / 5.95, 0.0, 1.0);
+              float wave = sin(uSwimPhase - sBody * 4.9 - uv.y * 1.25 - uv.x * 1.1) * (uTailAmp * 0.26 + 0.035) * uv.y;
+              p.x += wave;
+            } else if (uFinType == 4) {
+              // Peitorais: onda viajando de cima para baixo nos raios (sculling realista de ciclídeo!)
+              float row = (uSideSign > 0.0) ? uPectoralRowL : uPectoralRowR;
+              float phaseLag = uv.y * 1.35;
+              float angleY = uSideSign * (uPectoralSpread + row * cos(phaseLag));
+              float featherZ = sin(uTime * 4.6 + (uSideSign > 0.0 ? 0.0 : 3.14159) - phaseLag) * 0.095 * uv.x;
+              float c = cos(angleY);
+              float s = sin(angleY);
+              vec3 q = vec3(p.x * c - p.z * s, p.y + featherZ, p.x * s + p.z * c);
+              p = uPivot + q;
+            } else if (uFinType == 5) {
+              float tuck = mix(0.42, 0.0, clamp(uPectoralSpread * 1.4, 0.0, 1.0));
+              float c = cos(tuck);
+              float s = sin(tuck);
+              vec3 q = vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c);
+              p = uPivot + q;
+            }
+
+            vec3 dp = deformFishPosition(p);
+            vec3 dn = deformFishNormal(p, n);
+
+            vec4 wp = modelMatrix * vec4(dp, 1.0);
+            vWorldPos = wp.xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * dn);
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform int uFinType;
+          uniform float uTime;
+          uniform float uCausticsIntensity;
+          varying vec2 vUv;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${CAUSTICS_GLSL}
+
+          float hash21(vec2 p) {
+            p = fract(p * vec2(127.1, 311.7));
+            p += dot(p, p + 41.3);
+            return fract(p.x * p.y);
+          }
+
+          // Pintas orgânicas com deslocamento aleatório (sem grade artificial!)
+          float organicSpots(vec2 uv, vec2 scale, float density, float seed) {
+            vec2 p = uv * scale;
+            vec2 cell = floor(p);
+            vec2 f = fract(p) - 0.5;
+            float r1 = hash21(cell + seed);
+            float r2 = hash21(cell + seed + 17.3);
+            float r3 = hash21(cell + seed + 43.7);
+            vec2 jitter = (vec2(r1, r2) - 0.5) * 0.46;
+            float rad = 0.13 + 0.14 * r3;
+            float d = length(f - jitter);
+            return smoothstep(rad, rad * 0.30, d) * step(1.0 - density, r3);
+          }
+
+          void main() {
+            vec3 col = vec3(0.5);
+            float alpha = 0.7;
+            float rayRelief = 0.5;
+
+            if (uFinType == 0) {
+              // CAUDA DO TUCUNARÉ AZUL: fusão suave azul-oliva iridescente + lobo inferior âmbar-ferrugem + pintas orgânicas + OCELO redondo!
+              float rays = pow(0.5 + 0.5 * sin(vUv.y * 42.0 * 3.14159), 1.8);
+              rayRelief = rays;
+
+              vec3 peduncleBlend = vec3(0.32, 0.40, 0.22);
+              vec3 blueUpper = mix(vec3(0.14, 0.34, 0.44), vec3(0.18, 0.48, 0.70), smoothstep(0.18, 0.88, vUv.x));
+              vec3 amberLower = mix(vec3(0.58, 0.36, 0.14), vec3(0.76, 0.30, 0.11), smoothstep(0.12, 0.65, vUv.x));
+              amberLower = mix(amberLower, vec3(0.22, 0.44, 0.60), smoothstep(0.66, 0.96, vUv.x) * 0.58);
+
+              // Transição ampla e natural entre lobo inferior e superior
+              float lobeMix = smoothstep(0.24, 0.62, vUv.y);
+              col = mix(amberLower, blueUpper, lobeMix);
+              // Junção suave e longa com o pedúnculo (elimina o corte seco!)
+              col = mix(peduncleBlend, col, smoothstep(0.04, 0.30, vUv.x));
+              col *= (0.84 + 0.22 * rays);
+
+              // Pintas peroladas orgânicas (não alinhadas em grade)
+              float spots = organicSpots(vUv, vec2(11.0, 14.0), 0.44, 5.1) * smoothstep(0.24, 0.42, vUv.x) * smoothstep(0.96, 0.80, vUv.x);
+              col = mix(col, vec3(0.84, 0.95, 0.98), spots * 0.55);
+
+              // Borda traseira translúcida suave
+              col = mix(col, vec3(0.58, 0.82, 0.92), smoothstep(0.86, 0.99, vUv.x) * 0.35);
+
+              // OCELO perfeitamente redondo (compensando comprimento vs altura da cauda!)
+              vec2 ocDelta = (vUv - vec2(0.25, 0.63)) * vec2(1.75, 1.0);
+              float ocDist = length(ocDelta);
+              float goldRing = smoothstep(0.145, 0.118, ocDist) * smoothstep(0.074, 0.095, ocDist);
+              float blackCore = smoothstep(0.098, 0.075, ocDist);
+              col = mix(col, vec3(0.98, 0.88, 0.34), goldRing * 0.94);
+              col = mix(col, vec3(0.02, 0.025, 0.03), blackCore);
+
+              float edgeSoft = smoothstep(0.0, 0.05, vUv.y) * smoothstep(1.0, 0.95, vUv.y) * smoothstep(1.0, 0.86, vUv.x);
+              alpha = mix(0.96, 0.48, smoothstep(0.12, 1.0, vUv.x)) * edgeSoft;
+              alpha = max(alpha, max(goldRing, blackCore) * 0.98);
+            } else if (uFinType == 1) {
+              // DORSAL ESPINHOSA: espinhos escuros distintos + membrana grafite-oliva translúcida
+              float spinePos = fract(vUv.x * 14.0);
+              float spineShaft = smoothstep(0.22, 0.05, abs(spinePos - 0.5));
+              rayRelief = spineShaft;
+              vec3 membrane = mix(vec3(0.14, 0.19, 0.12), vec3(0.05, 0.08, 0.10), vUv.y);
+              vec3 spineCol = vec3(0.03, 0.04, 0.045);
+              col = mix(membrane, spineCol, spineShaft * 0.85);
+              col += vec3(0.10, 0.18, 0.22) * smoothstep(0.75, 0.98, vUv.y) * 0.45;
+              float edgeSoft = smoothstep(0.0, 0.04, vUv.x) * smoothstep(1.0, 0.95, vUv.x) * smoothstep(1.0, 0.88, vUv.y);
+              alpha = mix(0.92, 0.62, vUv.y) * (0.72 + 0.28 * spineShaft) * edgeSoft;
+            } else if (uFinType == 2) {
+              // DORSAL POSTERIOR MOLE: azul-turquesa iridescente com pintas orgânicas
+              float rays = pow(0.5 + 0.5 * sin(vUv.x * 26.0 * 3.14159), 1.6);
+              rayRelief = rays;
+              col = mix(vec3(0.20, 0.34, 0.28), vec3(0.18, 0.48, 0.72), smoothstep(0.12, 0.85, vUv.y)) * (0.86 + 0.20 * rays);
+              float spot = organicSpots(vUv, vec2(11.0, 7.0), 0.45, 2.3) * smoothstep(0.15, 0.35, vUv.y);
+              col = mix(col, vec3(0.84, 0.95, 0.98), spot * 0.58);
+              float edgeSoft = smoothstep(0.0, 0.06, vUv.x) * smoothstep(1.0, 0.93, vUv.x) * smoothstep(1.0, 0.84, vUv.y);
+              alpha = mix(0.84, 0.40, vUv.y) * edgeSoft;
+            } else if (uFinType == 3) {
+              // ANAL: base âmbar-alaranjada + borda azul iridescente com pintas orgânicas
+              float rays = pow(0.5 + 0.5 * sin(vUv.x * 24.0 * 3.14159), 1.6);
+              rayRelief = rays;
+              vec3 baseAmber = vec3(0.68, 0.38, 0.14);
+              vec3 tipBlue = vec3(0.20, 0.48, 0.72);
+              col = mix(baseAmber, tipBlue, smoothstep(0.32, 0.86, vUv.y)) * (0.86 + 0.18 * rays);
+              float spot = organicSpots(vUv, vec2(10.0, 6.0), 0.42, 9.1) * smoothstep(0.20, 0.40, vUv.y);
+              col = mix(col, vec3(0.86, 0.95, 0.98), spot * 0.50);
+              float edgeSoft = smoothstep(0.0, 0.07, vUv.x) * smoothstep(1.0, 0.92, vUv.x) * smoothstep(1.0, 0.84, vUv.y);
+              alpha = mix(0.84, 0.40, vUv.y) * edgeSoft;
+            } else if (uFinType == 4) {
+              // PEITORAIS: translúcidas sedosas esverdeado-douradas com raios delicados
+              float rays = pow(0.5 + 0.5 * sin(vUv.y * 24.0 * 3.14159), 1.6);
+              rayRelief = rays;
+              col = mix(vec3(0.50, 0.58, 0.34), vec3(0.74, 0.88, 0.86), smoothstep(0.08, 0.85, vUv.x)) * (0.86 + 0.18 * rays);
+              float edgeSoft = smoothstep(0.0, 0.08, vUv.y) * smoothstep(1.0, 0.92, vUv.y) * smoothstep(1.0, 0.80, vUv.x);
+              alpha = mix(0.56, 0.16, smoothstep(0.08, 1.0, vUv.x)) * (0.72 + 0.28 * rays) * edgeSoft;
+            } else {
+              // PÉLVICAS: âmbar-dourado com borda frontal azul-perolada
+              float rays = pow(0.5 + 0.5 * sin(vUv.y * 18.0 * 3.14159), 1.6);
+              rayRelief = rays;
+              col = mix(vec3(0.74, 0.42, 0.14), vec3(0.28, 0.54, 0.74), smoothstep(0.45, 0.92, vUv.x)) * (0.88 + 0.16 * rays);
+              col = mix(col, vec3(0.86, 0.96, 1.0), smoothstep(0.20, 0.02, vUv.y) * 0.65);
+              float edgeSoft = smoothstep(0.0, 0.08, vUv.y) * smoothstep(1.0, 0.90, vUv.y) * smoothstep(1.0, 0.82, vUv.x);
+              alpha = mix(0.82, 0.38, vUv.x) * edgeSoft;
+            }
+
+            // Iluminação + brilho sutil nos raios + translucidez subaquática
+            vec3 N = normalize(vWorldNormal);
+            vec3 V = normalize(cameraPosition - vWorldPos);
+            vec3 L = normalize(vec3(-0.28, 0.92, 0.44));
+            float rimLight = pow(1.0 - abs(dot(N, V)), 2.2) * 0.28;
+            float spec = pow(max(abs(dot(N, normalize(L + V))), 0.0), 32.0) * (0.14 + 0.16 * rayRelief);
+            col *= (0.74 + 0.26 * abs(N.x) + 0.16 * max(N.y, 0.0));
+            col += vec3(0.55, 0.90, 0.95) * (spec + rimLight * 0.5);
+
+            float c = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
+            col += vec3(0.40, 0.86, 0.82) * c * 0.14 * uCausticsIntensity;
+
+            gl_FragColor = vec4(col, alpha);
+          }
+        `
+      });
+    }
+
+    function createShadowMaterial(fishUniforms) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...globalFishUniforms,
+          ...fishUniforms,
+          uShadowOpacity: { value: 0.28 }
+        },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        vertexShader: /* glsl */ `
+          uniform float uTime;
+          varying vec2 vShadowUv;
+          ${FISH_DEFORM_GLSL}
+          void main() {
+            vShadowUv = uv;
+            vec3 p = position;
+            p.x += spineOffsetX(p.z);
+            p.x += sin(p.z * 1.3 + uTime * 1.5) * 0.04;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uShadowOpacity;
+          varying vec2 vShadowUv;
+          void main() {
+            // Sombra subaquática difusa e suave (sem bordas duras artificiais)
+            vec2 d = (vShadowUv - vec2(0.5, 0.5)) * 2.0;
+            // Afina levemente em direção à cauda
+            float taper = mix(1.0, 1.8, smoothstep(0.45, 1.0, vShadowUv.y));
+            float dist = length(vec2(d.x * taper, d.y));
+            float soft = exp(-dist * dist * 3.0) * smoothstep(1.0, 0.35, dist);
+            gl_FragColor = vec4(0.012, 0.058, 0.068, uShadowOpacity * soft);
+          }
+        `
+      });
+    }
+
+    // =========================================================================
+    // 6. INSTÂNCIA DO TUCUNARÉ AZUL HERÓI
+    // =========================================================================
+    function createTucunare() {
+      const fishUniforms = {
+        uSwimPhase: { value: 0 },
+        uTailAmp: { value: 0.14 },
+        uSpineCurve: { value: 0.0 },
+        uPectoralSpread: { value: 0.42 },
+        uPectoralRowL: { value: 0.0 },
+        uPectoralRowR: { value: 0.0 },
+        uDorsalFlare: { value: 0.65 },
+        uBreathPhase: { value: 0.0 },
+        uIdleDriftPhase: { value: 0.0 },
+        uMouthOpen: { value: 0.0 }
+      };
+
+      const group = new THREE.Group();
+      group.rotation.order = 'YXZ';
+      scene.add(group);
+
+      const bodyMesh = new THREE.Mesh(sharedGeos.body, createTucunareBodyMaterial(fishUniforms));
+      bodyMesh.renderOrder = 4;
+      group.add(bodyMesh);
+
+      const caudalMesh = new THREE.Mesh(sharedGeos.caudal, createTucunareFinMaterial(fishUniforms, 0));
+      caudalMesh.renderOrder = 5;
+      group.add(caudalMesh);
+
+      const spinyDorsalMesh = new THREE.Mesh(sharedGeos.spinyDorsal, createTucunareFinMaterial(fishUniforms, 1));
+      spinyDorsalMesh.renderOrder = 5;
+      group.add(spinyDorsalMesh);
+
+      const softDorsalMesh = new THREE.Mesh(sharedGeos.softDorsal, createTucunareFinMaterial(fishUniforms, 2));
+      softDorsalMesh.renderOrder = 5;
+      group.add(softDorsalMesh);
+
+      const analMesh = new THREE.Mesh(sharedGeos.anal, createTucunareFinMaterial(fishUniforms, 3));
+      analMesh.renderOrder = 5;
+      group.add(analMesh);
+
+      const pectLMesh = new THREE.Mesh(sharedGeos.pectL, createTucunareFinMaterial(fishUniforms, 4, 1, pectLPivot));
+      pectLMesh.renderOrder = 6;
+      group.add(pectLMesh);
+
+      const pectRMesh = new THREE.Mesh(sharedGeos.pectR, createTucunareFinMaterial(fishUniforms, 4, -1, pectRPivot));
+      pectRMesh.renderOrder = 6;
+      group.add(pectRMesh);
+
+      const pelvLMesh = new THREE.Mesh(sharedGeos.pelvL, createTucunareFinMaterial(fishUniforms, 5, 1, pelvLPivot));
+      pelvLMesh.renderOrder = 5;
+      group.add(pelvLMesh);
+
+      const pelvRMesh = new THREE.Mesh(sharedGeos.pelvR, createTucunareFinMaterial(fishUniforms, 5, -1, pelvRPivot));
+      pelvRMesh.renderOrder = 5;
+      group.add(pelvRMesh);
+
+      const eyeLMesh = new THREE.Mesh(sharedGeos.eyeL, createEyeMaterial(fishUniforms, 1, eyeLPos));
+      eyeLMesh.renderOrder = 5;
+      group.add(eyeLMesh);
+
+      const eyeRMesh = new THREE.Mesh(sharedGeos.eyeR, createEyeMaterial(fishUniforms, -1, eyeRPos));
+      eyeRMesh.renderOrder = 5;
+      group.add(eyeRMesh);
+
+      const shadowGroup = new THREE.Group();
+      scene.add(shadowGroup);
+      const shadowMat = createShadowMaterial(fishUniforms);
+      const shadowPlaneGeo = new THREE.PlaneGeometry(1.65, 5.4, 8, 28);
+      shadowPlaneGeo.rotateX(-Math.PI / 2);
+      const shadowBody = new THREE.Mesh(shadowPlaneGeo, shadowMat);
+      shadowBody.renderOrder = 1;
+      shadowGroup.add(shadowBody);
+
+      return {
+        uniforms: fishUniforms,
+        group,
+        shadowGroup,
+        shadowMat,
+
+        pos: isInspect ? new THREE.Vector3(0.0, 0.05, 0.0) : new THREE.Vector3(-1.4, 0.1, 0.2),
+        targetY: 0.1,
+        velY: 0,
+        heading: Math.PI * 0.46,
+        pitch: 0,
+        roll: 0,
+        speed: isInspect ? 0.0 : 1.35,
+        prevSpeed: 1.35,
+        acceleration: 0,
+        angularVelocity: 0,
+
+        // Estados: 'PATROL' | 'HOVER' | 'STALK' | 'STRIKE' | 'COAST' | 'FLEE'
+        state: 'PATROL',
+        stateTimer: 0,
+        hoverDuration: 0,
+        nextHoverIn: 3.6,
+        strikeDuration: 0.40,
+        fleeTimer: 0,
+        fleeCooldown: 0,
+        fleeHeadingOffset: 0,
+
+        // Ritmo orgânico de batida-e-deslize (não metronômico!)
+        kickCycleTimer: 0.8,
+        kickBurstLeft: 0.45,
+
+        waypoint: new THREE.Vector3(4.6, 0.25, -0.3),
+        waypointTimer: 0,
+        curiosityOrbitSign: 1,
+
+        swimPhase: 0,
+        breathPhase: 0,
+        idleDriftPhase: 0,
+        smoothEffort: 0.24,
+        smoothSpineCurve: 0,
+        smoothPectSpread: 0.42,
+        smoothDorsalFlare: 0.65,
+        pectRowPhase: 0,
+        smoothMouthOpen: 0,
+        biteSnapTimer: 0
+      };
+    }
+
+    const tucunare = createTucunare();
+
+    // =========================================================================
+    // 7. SISTEMA DE ISCAS + BOLHAS DE BOTE
+    // =========================================================================
+    const baits = [];
+    const MAX_BAITS = 8;
+
+    const baitGeo = new THREE.SphereGeometry(0.13, 12, 10);
+    const baitMat = new THREE.MeshStandardMaterial({
+      color: 0xe6a854,
+      roughness: 0.48,
+      metalness: 0.15,
+      emissive: 0x422406,
+      emissiveIntensity: 0.35
+    });
+
+    const biteBubbles = [];
+    const bubbleGeo = new THREE.SphereGeometry(0.055, 8, 6);
+    const bubbleMat = new THREE.MeshBasicMaterial({
+      color: 0xc8faf2,
+      transparent: true,
+      opacity: 0.68,
+      depthWrite: false
+    });
+
+    function spawnStrikeSplash(x, y, z) {
+      spawnRipple(x, z, 1.35);
+      for (let i = 0; i < 11; i++) {
+        const mesh = new THREE.Mesh(bubbleGeo, bubbleMat.clone());
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 0.55 + Math.random() * 1.45;
+        mesh.position.set(x, y, z);
+        mesh.scale.setScalar(0.5 + Math.random() * 1.0);
+        mesh.renderOrder = 14;
+        scene.add(mesh);
+        biteBubbles.push({
+          mesh,
+          vx: Math.cos(ang) * spd,
+          vy: 0.9 + Math.random() * 1.35,
+          vz: Math.sin(ang) * spd,
+          life: 0,
+          maxLife: 0.75 + Math.random() * 0.55
+        });
+      }
+    }
+
+    function spawnBait(x, z) {
+      const cx = THREE.MathUtils.clamp(x, -swimVolume.halfX * 0.90, swimVolume.halfX * 0.90);
+      const cz = THREE.MathUtils.clamp(z, swimVolume.minZ * 0.85, swimVolume.maxZ * 0.85);
+      if (baits.length >= MAX_BAITS) {
+        const oldest = baits.shift();
+        scene.remove(oldest.mesh);
+      }
+      const mesh = new THREE.Mesh(baitGeo, baitMat);
+      mesh.scale.set(1.25, 0.72, 0.82);
+      mesh.position.set(cx, 2.3, cz);
+      mesh.renderOrder = 10;
+      scene.add(mesh);
+
+      spawnRipple(cx, cz, 0.95);
+      baits.push({
+        mesh,
+        pos: new THREE.Vector3(cx, 2.3, cz),
+        targetY: -0.20 + Math.random() * 1.20,
+        age: 0,
+        seed: Math.random() * Math.PI * 2
+      });
+    }
+
+    function updateBaitsAndBubbles(dt) {
+      for (let i = baits.length - 1; i >= 0; i--) {
+        const b = baits[i];
+        b.age += dt;
+        b.pos.y = THREE.MathUtils.lerp(b.pos.y, b.targetY + Math.sin(clockTime * 2.8 + b.seed) * 0.14, Math.min(1, dt * 1.4));
+        b.pos.x += Math.sin(clockTime * 1.6 + b.seed) * 0.10 * dt;
+        b.mesh.position.copy(b.pos);
+        b.mesh.rotation.y += dt * 1.4;
+        if (b.age > 32.0) {
+          scene.remove(b.mesh);
+          baits.splice(i, 1);
+        }
+      }
+
+      for (let i = biteBubbles.length - 1; i >= 0; i--) {
+        const p = biteBubbles[i];
+        p.life += dt;
+        p.mesh.position.x += p.vx * dt;
+        p.mesh.position.y += p.vy * dt;
+        p.mesh.position.z += p.vz * dt;
+        p.vx *= 0.94;
+        p.vz *= 0.94;
+        const remain = 1.0 - p.life / p.maxLife;
+        p.mesh.material.opacity = Math.max(0, remain * 0.68);
+        if (p.life >= p.maxLife) {
+          scene.remove(p.mesh);
+          p.mesh.material.dispose();
+          biteBubbles.splice(i, 1);
+        }
+      }
+    }
+
+    // =========================================================================
+    // 8. INTERAÇÃO COM MOUSE
+    // =========================================================================
+    const mouse = {
+      world: new THREE.Vector3(999, 0, 999),
+      inside: false,
+      stillTime: 0,
+      speed: 0,
+      moving: false,
+      moveCooldown: 0,
+      lastRipplePos: new THREE.Vector2(999, 999),
+      lastRippleTime: -10
+    };
+
+    const raycaster = new THREE.Raycaster();
+    const pointerNdc = new THREE.Vector2();
+    const midPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const hitPoint = new THREE.Vector3();
+
+    function projectPointer(clientX, clientY) {
+      pointerNdc.x = (clientX / window.innerWidth) * 2 - 1;
+      pointerNdc.y = -(clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointerNdc, camera);
+      if (raycaster.ray.intersectPlane(midPlane, hitPoint)) {
+        return {
+          x: THREE.MathUtils.clamp(hitPoint.x, -swimVolume.halfX, swimVolume.halfX),
+          z: THREE.MathUtils.clamp(hitPoint.z, swimVolume.minZ, swimVolume.maxZ)
+        };
+      }
+      return null;
+    }
+
+    window.addEventListener('pointermove', (e) => {
+      if (!params.interactiveMouse) return;
+      const pt = projectPointer(e.clientX, e.clientY);
+      if (!pt) return;
+      const movedDist = Math.hypot(pt.x - mouse.world.x, pt.z - mouse.world.z);
+      mouse.world.set(pt.x, 0.1, pt.z);
+      mouse.inside = true;
+
+      if (movedDist > 0.08 && movedDist < 10.0) {
+        mouse.speed = Math.min(28, movedDist * 32);
+        mouse.moving = true;
+        mouse.moveCooldown = 0.28;
+        mouse.stillTime = 0;
+
+        const dRip = Math.hypot(pt.x - mouse.lastRipplePos.x, pt.z - mouse.lastRipplePos.y);
+        if (dRip > 0.65 || clockTime - mouse.lastRippleTime > 0.11) {
+          spawnRipple(pt.x, pt.z, THREE.MathUtils.clamp(0.16 + movedDist * 0.22, 0.18, 0.42));
+          mouse.lastRipplePos.set(pt.x, pt.z);
+          mouse.lastRippleTime = clockTime;
+        }
+      } else if (movedDist >= 10.0) {
+        mouse.lastRipplePos.set(pt.x, pt.z);
+      }
+    });
+
+    window.addEventListener('pointerleave', () => {
+      mouse.inside = false;
+      mouse.stillTime = 0;
+      mouse.moving = false;
+    });
+
+    window.addEventListener('pointerdown', (e) => {
+      if (!params.interactiveMouse) return;
+      if (e.target.closest && e.target.closest('.lil-gui')) return;
+      const pt = projectPointer(e.clientX, e.clientY);
+      if (!pt) return;
+      mouse.world.set(pt.x, 0.1, pt.z);
+      mouse.inside = true;
+      spawnBait(pt.x, pt.z);
+    });
+
+    function updateMouseState(dt) {
+      if (!params.interactiveMouse || !mouse.inside) {
+        mouse.stillTime = 0;
+        mouse.moving = false;
+        mouse.speed = 0;
+        return;
+      }
+      if (mouse.moveCooldown > 0) {
+        mouse.moveCooldown -= dt;
+        if (mouse.moveCooldown <= 0) mouse.moving = false;
+      } else {
+        mouse.stillTime += dt;
+      }
+      mouse.speed = THREE.MathUtils.lerp(mouse.speed, 0, Math.min(1, dt * 10));
+    }
+
+    // =========================================================================
+    // 9. LOCOMOÇÃO NATURAL DO TUCUNARÉ (KICK-AND-GLIDE + ESPAIRAR + ESPREITA + BOTE)
+    // =========================================================================
+    function normalizeAngle(a) {
+      while (a > Math.PI) a -= Math.PI * 2;
+      while (a < -Math.PI) a += Math.PI * 2;
+      return a;
+    }
+
+    function pickPatrolWaypoint(fish) {
+      const targetSide = fish.pos.x > 0 ? -1 : 1;
+      const wx = targetSide * (swimVolume.halfX * (0.38 + Math.random() * 0.44));
+      const wy = THREE.MathUtils.lerp(swimVolume.minY + 0.25, swimVolume.maxY - 0.2, Math.random());
+      const wz = THREE.MathUtils.lerp(swimVolume.minZ * 0.68, swimVolume.maxZ * 0.68, Math.random());
+      fish.waypoint.set(wx, wy, wz);
+      fish.waypointTimer = 4.8 + Math.random() * 4.2;
+    }
+
+    function triggerPredatorBurst(fish, intensity = 1.0) {
+      fish.state = 'STRIKE';
+      fish.stateTimer = 0;
+      fish.strikeDuration = 0.36 + Math.random() * 0.14;
+      const tailDist = 2.4 * params.fishScale;
+      spawnRipple(
+        fish.pos.x - Math.sin(fish.heading) * tailDist,
+        fish.pos.z - Math.cos(fish.heading) * tailDist,
+        0.95 * intensity
+      );
+    }
+
+    function triggerPredatorFlee(fish) {
+      fish.state = 'FLEE';
+      fish.stateTimer = 0;
+      fish.fleeTimer = 0.95 + Math.random() * 0.35;
+      fish.fleeCooldown = 0.55;
+      fish.fleeHeadingOffset = (Math.random() - 0.5) * 0.55;
+      const tailDist = 2.4 * params.fishScale;
+      spawnRipple(
+        fish.pos.x - Math.sin(fish.heading) * tailDist,
+        fish.pos.z - Math.cos(fish.heading) * tailDist,
+        1.15
+      );
+    }
+
+    function updateTucunare(fish, dt) {
+      if (isInspect) {
+        // Modo inspeção: tucunaré pairando em perfil 3/4 de perto para conferência visual
+        fish.swimPhase += 2.2 * dt;
+        fish.breathPhase += 2.4 * dt;
+        fish.idleDriftPhase += 1.6 * dt;
+        fish.pectRowPhase += 3.2 * dt;
+        fish.uniforms.uSwimPhase.value = fish.swimPhase;
+        fish.uniforms.uTailAmp.value = 0.11;
+        fish.uniforms.uSpineCurve.value = 0.06;
+        fish.uniforms.uPectoralSpread.value = 0.48;
+        fish.uniforms.uPectoralRowL.value = Math.sin(fish.pectRowPhase) * 0.18;
+        fish.uniforms.uPectoralRowR.value = -Math.sin(fish.pectRowPhase) * 0.18;
+        fish.uniforms.uDorsalFlare.value = 0.92;
+        fish.uniforms.uBreathPhase.value = fish.breathPhase;
+        fish.uniforms.uIdleDriftPhase.value = fish.idleDriftPhase;
+        fish.uniforms.uMouthOpen.value = isInspectMouth ? 0.95 : 0.0;
+        fish.group.position.set(0, 0.05, 0);
+        fish.group.rotation.set(-0.04, Math.PI * 0.44, 0);
+        fish.group.scale.setScalar(params.fishScale * 1.15);
+        fish.shadowGroup.position.set(0.95, RIVERBED_Y + 0.14, -0.45);
+        fish.shadowGroup.rotation.y = Math.PI * 0.44;
+        fish.shadowGroup.scale.setScalar(params.fishScale * 1.25);
+        return;
+      }
+
+      fish.stateTimer += dt;
+      if (fish.fleeCooldown > 0) fish.fleeCooldown -= dt;
+
+      const patrolSpeed = params.baseSpeed;
+      const strikePeakSpeed = patrolSpeed * 3.2;
+
+      // 1. Reação defensiva a movimento brusco muito próximo
+      if (params.interactiveMouse && mouse.inside && mouse.moving && fish.fleeCooldown <= 0) {
+        const dMouse = Math.hypot(fish.pos.x - mouse.world.x, fish.pos.z - mouse.world.z);
+        if (dMouse < 3.4 && mouse.speed > 5.5) {
+          triggerPredatorFlee(fish);
+        }
+      }
+
+      // 2. Verifica isca na água
+      let nearestBait = null;
+      let nearestBaitDist = 999;
+      if (fish.state !== 'FLEE' && baits.length > 0) {
+        for (let i = 0; i < baits.length; i++) {
+          const d = fish.pos.distanceTo(baits[i].pos);
+          if (d < nearestBaitDist) {
+            nearestBaitDist = d;
+            nearestBait = baits[i];
+          }
+        }
+        if (nearestBait && fish.state !== 'STALK' && fish.state !== 'STRIKE') {
+          fish.state = 'STALK';
+          fish.stateTimer = 0;
+        }
+      } else if (fish.state === 'STALK' && baits.length === 0) {
+        fish.state = 'PATROL';
+        fish.stateTimer = 0;
+      }
+
+      // 3. Máquina de estados
+      let thrustEffort = 0.18;
+      let targetDorsalFlare = 0.62;
+      let targetMouthOpen = 0.0;
+      let desiredDirX = Math.sin(fish.heading);
+      let desiredDirZ = Math.cos(fish.heading);
+      let desiredY = fish.targetY;
+      if (fish.biteSnapTimer > 0) fish.biteSnapTimer = Math.max(0, fish.biteSnapTimer - dt);
+
+      if (fish.state === 'FLEE') {
+        fish.fleeTimer -= dt;
+        targetDorsalFlare = 1.0;
+        const fleeSpeed = patrolSpeed * 3.0;
+        if (fish.stateTimer < 0.34) {
+          fish.speed = THREE.MathUtils.lerp(fish.speed, fleeSpeed, Math.min(1, dt * 10.0));
+          thrustEffort = 1.55;
+        } else {
+          fish.speed = THREE.MathUtils.lerp(fish.speed, patrolSpeed * 1.05, Math.min(1, dt * 2.6));
+          thrustEffort = 0.42;
+        }
+        const awayAng = Math.atan2(fish.pos.x - mouse.world.x, fish.pos.z - mouse.world.z) + fish.fleeHeadingOffset;
+        desiredDirX = Math.sin(awayAng);
+        desiredDirZ = Math.cos(awayAng);
+
+        if (fish.fleeTimer <= 0) {
+          fish.state = 'COAST';
+          fish.stateTimer = 0;
+          pickPatrolWaypoint(fish);
+        }
+      } else if (fish.state === 'STALK' && nearestBait) {
+        targetDorsalFlare = 0.98;
+        const toX = nearestBait.pos.x - fish.pos.x;
+        const toZ = nearestBait.pos.z - fish.pos.z;
+        const horizDist = Math.max(0.01, Math.hypot(toX, toZ));
+        desiredDirX = toX / horizDist;
+        desiredDirZ = toZ / horizDist;
+        desiredY = nearestBait.pos.y;
+
+        const targetHeading = Math.atan2(desiredDirX, desiredDirZ);
+        const headingErr = Math.abs(normalizeAngle(targetHeading - fish.heading));
+
+        const stalkSpd = horizDist > 4.6 ? patrolSpeed * 0.88 : patrolSpeed * 0.42;
+        fish.speed = THREE.MathUtils.lerp(fish.speed, stalkSpd, Math.min(1, dt * 3.2));
+        thrustEffort = horizDist > 4.6 ? 0.30 : 0.12;
+
+        if (horizDist < 4.2 && headingErr < 0.30 && fish.stateTimer > 0.38) {
+          triggerPredatorBurst(fish, 1.15);
+        }
+      } else if (fish.state === 'STRIKE') {
+        targetDorsalFlare = 1.0;
+        const p = Math.min(fish.stateTimer / fish.strikeDuration, 1.0);
+        const impulse = Math.sin(p * Math.PI);
+        const accel = (strikePeakSpeed - patrolSpeed) * 4.8 * impulse;
+        fish.speed = Math.min(strikePeakSpeed * 1.15, fish.speed + accel * dt);
+        thrustEffort = 0.65 + 1.20 * impulse;
+
+        if (nearestBait) {
+          const toX = nearestBait.pos.x - fish.pos.x;
+          const toZ = nearestBait.pos.z - fish.pos.z;
+          const len = Math.max(0.01, Math.hypot(toX, toZ));
+          desiredDirX = toX / len;
+          desiredDirZ = toZ / len;
+          desiredY = nearestBait.pos.y;
+
+          const s = params.fishScale;
+          const mouthX = fish.pos.x + Math.sin(fish.heading) * (2.1 * s);
+          const mouthZ = fish.pos.z + Math.cos(fish.heading) * (2.1 * s);
+          const mouthDist = Math.hypot(mouthX - nearestBait.pos.x, fish.pos.y - nearestBait.pos.y, mouthZ - nearestBait.pos.z);
+
+          // Abre a boca progressivamente conforme se aproxima para engolir a isca no bote!
+          if (mouthDist < 2.8 * s) {
+            targetMouthOpen = THREE.MathUtils.clamp(1.0 - (mouthDist - 0.65 * s) / (2.15 * s), 0.18, 1.0);
+          }
+
+          if (mouthDist < 0.88 * s) {
+            const idx = baits.indexOf(nearestBait);
+            if (idx !== -1) {
+              spawnStrikeSplash(nearestBait.pos.x, nearestBait.pos.y, nearestBait.pos.z);
+              scene.remove(nearestBait.mesh);
+              baits.splice(idx, 1);
+            }
+            fish.biteSnapTimer = 0.24; // Fecha a boca com firmeza e engole
+            fish.state = 'COAST';
+            fish.stateTimer = 0;
+            pickPatrolWaypoint(fish);
+          }
+        }
+
+        if (fish.state === 'STRIKE' && fish.stateTimer >= fish.strikeDuration) {
+          fish.state = 'COAST';
+          fish.stateTimer = 0;
+        }
+      } else if (fish.state === 'COAST') {
+        targetDorsalFlare = 0.68;
+        const floorSpd = patrolSpeed * 0.42;
+        const excess = Math.max(0, fish.speed - floorSpd);
+        fish.speed = floorSpd + excess * Math.exp(-1.55 * dt);
+        thrustEffort = 0.06;
+
+        const toX = fish.waypoint.x - fish.pos.x;
+        const toZ = fish.waypoint.z - fish.pos.z;
+        const len = Math.max(0.01, Math.hypot(toX, toZ));
+        desiredDirX = toX / len;
+        desiredDirZ = toZ / len;
+        desiredY = fish.waypoint.y;
+
+        if (fish.stateTimer > 1.2 && fish.speed < patrolSpeed * 0.92) {
+          if (Math.random() < 0.48 * params.ambushTendency) {
+            fish.state = 'HOVER';
+            fish.stateTimer = 0;
+            fish.hoverDuration = (2.6 + Math.random() * 3.2) * params.ambushTendency;
+          } else {
+            fish.state = 'PATROL';
+            fish.stateTimer = 0;
+          }
+        }
+      } else if (fish.state === 'HOVER') {
+        // ESPAIRAR: suspenso quase imóvel, peitorais remando suavemente, cauda flutuando
+        targetDorsalFlare = 0.74;
+        fish.speed = THREE.MathUtils.lerp(fish.speed, 0.11, Math.min(1, dt * 2.5));
+        thrustEffort = 0.04;
+        fish.hoverDuration -= dt;
+
+        if (params.interactiveMouse && mouse.inside && mouse.stillTime > 1.1) {
+          const toX = mouse.world.x - fish.pos.x;
+          const toZ = mouse.world.z - fish.pos.z;
+          const len = Math.max(0.01, Math.hypot(toX, toZ));
+          desiredDirX = toX / len;
+          desiredDirZ = toZ / len;
+          targetDorsalFlare = 0.88;
+        }
+
+        if (fish.hoverDuration <= 0) {
+          fish.state = 'PATROL';
+          fish.stateTimer = 0;
+          fish.nextHoverIn = (4.4 + Math.random() * 4.5) / Math.max(0.3, params.ambushTendency);
+          pickPatrolWaypoint(fish);
+        }
+      } else {
+        // PATROL com ritmo orgânico de 1-2 batidas de cauda + deslize suave (kick-and-glide)
+        fish.waypointTimer -= dt;
+        fish.nextHoverIn -= dt;
+
+        const dWp = Math.hypot(fish.waypoint.x - fish.pos.x, fish.waypoint.z - fish.pos.z);
+        if (dWp < 1.8 || fish.waypointTimer <= 0) {
+          pickPatrolWaypoint(fish);
+        }
+
+        fish.kickCycleTimer -= dt;
+        if (fish.kickCycleTimer <= 0) {
+          fish.kickBurstLeft = 0.45 + Math.random() * 0.45;
+          fish.kickCycleTimer = 1.65 + Math.random() * 1.45;
+        }
+        const isKicking = fish.kickBurstLeft > 0;
+        if (isKicking) fish.kickBurstLeft -= dt;
+
+        const targetSpd = isKicking ? patrolSpeed * 1.18 : patrolSpeed * 0.78;
+        fish.speed = THREE.MathUtils.lerp(fish.speed, targetSpd, Math.min(1, dt * (isKicking ? 3.2 : 1.4)));
+        thrustEffort = isKicking ? 0.42 : 0.10;
+
+        let sx = (fish.waypoint.x - fish.pos.x) / Math.max(0.01, dWp);
+        let sz = (fish.waypoint.z - fish.pos.z) / Math.max(0.01, dWp);
+
+        if (params.interactiveMouse && mouse.inside && mouse.stillTime > 1.8) {
+          const ramp = Math.min(1.0, (mouse.stillTime - 1.8) / 2.2);
+          const toX = mouse.world.x - fish.pos.x;
+          const toZ = mouse.world.z - fish.pos.z;
+          const dist = Math.max(0.1, Math.hypot(toX, toZ));
+          const nx = toX / dist, nz = toZ / dist;
+          const tx = -nz * fish.curiosityOrbitSign, tz = nx * fish.curiosityOrbitSign;
+          if (dist > 3.2) {
+            sx = THREE.MathUtils.lerp(sx, nx * 0.85 + tx * 0.35, ramp * 0.75);
+            sz = THREE.MathUtils.lerp(sz, nz * 0.85 + tz * 0.35, ramp * 0.75);
+          } else {
+            sx = THREE.MathUtils.lerp(sx, tx, ramp * 0.75);
+            sz = THREE.MathUtils.lerp(sz, tz, ramp * 0.75);
+          }
+          targetDorsalFlare = THREE.MathUtils.lerp(targetDorsalFlare, 0.82, ramp);
+        }
+
+        desiredDirX = sx;
+        desiredDirZ = sz;
+        desiredY = fish.waypoint.y;
+
+        if (fish.nextHoverIn <= 0 && Math.abs(fish.pos.x) < swimVolume.halfX * 0.72) {
+          fish.state = 'HOVER';
+          fish.stateTimer = 0;
+          fish.hoverDuration = (2.8 + Math.random() * 3.4) * params.ambushTendency;
+        }
+      }
+
+      // 4. Contenção suave no volume isométrico
+      const marginX = 2.0;
+      const safeX = swimVolume.halfX - marginX;
+      let steerX = desiredDirX * 3.0;
+      let steerZ = desiredDirZ * 3.0;
+
+      if (Math.abs(fish.pos.x) > safeX) {
+        const over = (Math.abs(fish.pos.x) - safeX) / marginX;
+        steerX -= Math.sign(fish.pos.x) * over * over * 9.5;
+      }
+      if (fish.pos.z > swimVolume.maxZ - 0.8) {
+        const over = (fish.pos.z - (swimVolume.maxZ - 0.8)) / 0.9;
+        steerZ -= over * over * 9.5;
+      } else if (fish.pos.z < swimVolume.minZ + 0.8) {
+        const over = ((swimVolume.minZ + 0.8) - fish.pos.z) / 0.9;
+        steerZ += over * over * 9.5;
+      }
+
+      const desiredHeading = Math.atan2(steerX, steerZ);
+      const angleDiff = normalizeAngle(desiredHeading - fish.heading);
+
+      const maxTurn = fish.state === 'FLEE' || fish.state === 'STRIKE' ? 3.4 : (fish.state === 'HOVER' ? 0.85 : 1.55);
+      const turnGain = fish.state === 'FLEE' || fish.state === 'STRIKE' ? 3.8 : (fish.state === 'HOVER' ? 1.15 : 1.85);
+      const targetAngVel = THREE.MathUtils.clamp(angleDiff * turnGain, -maxTurn, maxTurn);
+      fish.angularVelocity = THREE.MathUtils.lerp(fish.angularVelocity, targetAngVel, Math.min(1, dt * 4.5));
+
+      fish.heading = normalizeAngle(fish.heading + fish.angularVelocity * dt);
+      fish.pos.x += Math.sin(fish.heading) * fish.speed * dt;
+      fish.pos.z += Math.cos(fish.heading) * fish.speed * dt;
+
+      const clampedDesiredY = THREE.MathUtils.clamp(desiredY, swimVolume.minY, swimVolume.maxY);
+      const targetVelY = THREE.MathUtils.clamp((clampedDesiredY - fish.pos.y) * 1.1, -1.0, 1.0);
+      fish.velY = THREE.MathUtils.lerp(fish.velY, targetVelY, Math.min(1, dt * 2.2));
+      fish.pos.y = THREE.MathUtils.clamp(fish.pos.y + fish.velY * dt, swimVolume.minY, swimVolume.maxY);
+
+      const hoverPitchBias = fish.state === 'HOVER' ? -0.05 : 0.0;
+      const targetPitch = THREE.MathUtils.clamp(-fish.velY / Math.max(1.2, fish.speed + 0.8) * 0.40 + hoverPitchBias, -0.24, 0.22);
+      fish.pitch = THREE.MathUtils.lerp(fish.pitch, targetPitch, Math.min(1, dt * 3.4));
+
+      const targetRoll = THREE.MathUtils.clamp(-fish.angularVelocity * 0.14 * Math.min(1, fish.speed * 0.5), -0.22, 0.22);
+      fish.roll = THREE.MathUtils.lerp(fish.roll, targetRoll, Math.min(1, dt * 3.8));
+
+      const rawAccel = (fish.speed - fish.prevSpeed) / Math.max(dt, 0.001);
+      fish.acceleration = THREE.MathUtils.lerp(fish.acceleration, rawAccel, Math.min(1, dt * 7.5));
+      fish.prevSpeed = fish.speed;
+
+      // 5. Acoplamento corpo-física
+      const accelBoost = Math.max(0, fish.acceleration) * 0.18;
+      const targetEffort = THREE.MathUtils.clamp(thrustEffort + accelBoost, 0.03, 1.85);
+      fish.smoothEffort = THREE.MathUtils.lerp(fish.smoothEffort, targetEffort, Math.min(1, dt * 5.8));
+
+      const swimFreq = 1.8 + fish.smoothEffort * 8.6;
+      fish.swimPhase += swimFreq * dt;
+      fish.breathPhase += (2.3 + fish.smoothEffort * 2.0) * dt;
+      fish.idleDriftPhase += 1.55 * dt;
+
+      const tailAmp = 0.045 + fish.smoothEffort * 0.30;
+      fish.smoothSpineCurve = THREE.MathUtils.lerp(fish.smoothSpineCurve, fish.angularVelocity * 0.48, Math.min(1, dt * 5.8));
+      fish.smoothDorsalFlare = THREE.MathUtils.lerp(fish.smoothDorsalFlare, targetDorsalFlare, Math.min(1, dt * 4.2));
+
+      const fastMode = fish.state === 'STRIKE' || fish.state === 'FLEE';
+      const hoverMode = fish.state === 'HOVER' || fish.state === 'STALK';
+      const targetSpread = fastMode ? 0.05 : (hoverMode ? 0.56 : 0.34);
+      fish.smoothPectSpread = THREE.MathUtils.lerp(fish.smoothPectSpread, targetSpread, Math.min(1, dt * 4.2));
+
+      fish.pectRowPhase += (hoverMode ? 3.5 : 2.0) * dt;
+      const rowAmp = fastMode ? 0.03 : (hoverMode ? 0.24 : 0.10);
+      const scull = Math.sin(fish.pectRowPhase) * rowAmp;
+      const turnL = Math.max(0, fish.angularVelocity) * 0.22;
+      const turnR = Math.max(0, -fish.angularVelocity) * 0.22;
+
+      // Animação suave da abertura da boca (abre rápido no bote e fecha firme ao abocanhar)
+      const mouthLerpRate = targetMouthOpen > fish.smoothMouthOpen ? 13.0 : (fish.biteSnapTimer > 0 ? 18.0 : 8.5);
+      fish.smoothMouthOpen = THREE.MathUtils.lerp(fish.smoothMouthOpen, targetMouthOpen, Math.min(1, dt * mouthLerpRate));
+
+      fish.uniforms.uSwimPhase.value = fish.swimPhase;
+      fish.uniforms.uTailAmp.value = tailAmp;
+      fish.uniforms.uSpineCurve.value = fish.smoothSpineCurve;
+      fish.uniforms.uPectoralSpread.value = fish.smoothPectSpread;
+      fish.uniforms.uPectoralRowL.value = scull + turnL;
+      fish.uniforms.uPectoralRowR.value = -scull + turnR;
+      fish.uniforms.uDorsalFlare.value = fish.smoothDorsalFlare;
+      fish.uniforms.uBreathPhase.value = fish.breathPhase;
+      fish.uniforms.uIdleDriftPhase.value = fish.idleDriftPhase;
+      fish.uniforms.uMouthOpen.value = fish.smoothMouthOpen;
+
+      // Informa a posição do tucunaré para as algas balançarem na sua esteira
+      algaeUniforms.uFishPos.value.copy(fish.pos);
+
+      // 6. Transformações 3D + sombra no leito arenoso
+      const s = params.fishScale;
+      const bobY = Math.sin(clockTime * 1.4) * 0.04;
+      const finalY = fish.pos.y + bobY;
+
+      fish.group.position.set(fish.pos.x, finalY, fish.pos.z);
+      fish.group.rotation.set(fish.pitch, fish.heading, fish.roll);
+      fish.group.scale.setScalar(s);
+
+      const heightAboveBed = Math.max(0.4, finalY - RIVERBED_Y);
+      const shadowSpread = 1.0 + heightAboveBed * 0.08;
+      fish.shadowGroup.position.set(
+        fish.pos.x + heightAboveBed * 0.30,
+        RIVERBED_Y + 0.14,
+        fish.pos.z - heightAboveBed * 0.16
+      );
+      fish.shadowGroup.rotation.y = fish.heading;
+      fish.shadowGroup.scale.set(s * shadowSpread, s, s * shadowSpread);
+      fish.shadowMat.uniforms.uShadowOpacity.value = THREE.MathUtils.clamp(0.34 - heightAboveBed * 0.042, 0.10, 0.32);
+    }
+
+    // =========================================================================
+    // 10. PAINEL LIL-GUI + LIVELY WALLPAPER API
+    // =========================================================================
+    let gui = null;
+    const guiControllers = {};
+
+    function initGui() {
+      try {
+        const { GUI } = window.lil;
+        gui = new GUI({ title: 'Tucunaré Azul · Controles', width: 265 });
+
+        guiControllers.baseSpeed = gui.add(params, 'baseSpeed', 0.8, 3.8, 0.05).name('Velocidade Patrulha');
+        guiControllers.ambushTendency = gui.add(params, 'ambushTendency', 0.2, 1.8, 0.05).name('Tendência Emboscada');
+        guiControllers.causticsIntensity = gui.add(params, 'causticsIntensity', 0.0, 2.2, 0.05).name('Cáusticas').onChange(syncEnvUniforms);
+        guiControllers.sunbeamsIntensity = gui.add(params, 'sunbeamsIntensity', 0.0, 2.0, 0.05).name('Raios de Luz').onChange(syncEnvUniforms);
+        guiControllers.fishScale = gui.add(params, 'fishScale', 0.6, 1.6, 0.05).name('Tamanho Tucunaré');
+        guiControllers.showAlgae = gui.add(params, 'showAlgae').name('Algas no Fundo').onChange(syncAlgaeVisibility);
+        guiControllers.interactiveMouse = gui.add(params, 'interactiveMouse').name('Interação Mouse');
+        gui.add(params, 'dropBaitCenter').name('Soltar Isca');
+        gui.add(params, 'triggerStrike').name('Disparar Bote');
+
+        gui.close();
+        syncGuiVisibility();
+      } catch (err) {
+        console.warn('lil-gui indisponível:', err);
+      }
+    }
+
+    function syncAlgaeVisibility() {
+      algaeMesh.visible = Boolean(params.showAlgae);
+    }
+
+    function syncEnvUniforms() {
+      riverbedUniforms.uCausticsIntensity.value = params.causticsIntensity;
+      waterSurfaceUniforms.uCausticsIntensity.value = params.causticsIntensity;
+      backdropUniforms.uCausticsIntensity.value = params.causticsIntensity;
+      globalFishUniforms.uCausticsIntensity.value = params.causticsIntensity;
+      algaeUniforms.uCausticsIntensity.value = params.causticsIntensity;
+      sunbeamUniforms.uIntensity.value = params.sunbeamsIntensity;
+    }
+
+    function syncGuiVisibility() {
+      if (!gui) return;
+      gui.domElement.classList.toggle('hidden-gui', !params.showGui);
+    }
+
+    window.livelyPropertyListener = function (name, val) {
+      if (name === 'baseSpeed') {
+        params.baseSpeed = (Number(val) / 100) * 1.85;
+      } else if (name === 'ambushTendency') {
+        params.ambushTendency = Number(val) / 100;
+      } else if (name === 'causticsIntensity') {
+        params.causticsIntensity = Number(val) / 100;
+        syncEnvUniforms();
+      } else if (name === 'sunbeamsIntensity') {
+        params.sunbeamsIntensity = Number(val) / 100;
+        syncEnvUniforms();
+      } else if (name === 'fishScale') {
+        params.fishScale = Number(val) / 100;
+      } else if (name === 'showAlgae') {
+        params.showAlgae = Boolean(val);
+        syncAlgaeVisibility();
+      } else if (name === 'interactiveMouse') {
+        params.interactiveMouse = Boolean(val);
+      } else if (name === 'showGui') {
+        params.showGui = Boolean(val);
+        syncGuiVisibility();
+      }
+      if (guiControllers[name]) guiControllers[name].updateDisplay();
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'p' || e.key === 'P' || e.key === 'h' || e.key === 'H') {
+        params.showGui = !params.showGui;
+        syncGuiVisibility();
+      } else if (e.code === 'Space') {
+        params.dropBaitCenter();
+      }
+    });
+
+    initGui();
+
+    // =========================================================================
+    // 11. RESIZE E LOOP PRINCIPAL
+    // =========================================================================
+    function onResize() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      updateBounds();
+      moteUniforms.uPixelRatio.value = renderer.getPixelRatio();
+    }
+    window.addEventListener('resize', onResize);
+
+    let lastNow = performance.now();
+    let clockTime = 0;
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min((now - lastNow) * 0.001, 0.05);
+      lastNow = now;
+      clockTime += dt;
+
+      // Micro-flutuação sutil de lente subaquática
+      if (!isInspect) {
+        camera.position.set(
+          CAM_BASE.x + Math.sin(clockTime * 0.25) * 0.14,
+          CAM_BASE.y + Math.cos(clockTime * 0.19) * 0.09,
+          CAM_BASE.z
+        );
+        camera.lookAt(CAM_TARGET);
+      }
+
+      riverbedUniforms.uTime.value = clockTime;
+      waterSurfaceUniforms.uTime.value = clockTime;
+      backdropUniforms.uTime.value = clockTime;
+      sunbeamUniforms.uTime.value = clockTime;
+      globalFishUniforms.uTime.value = clockTime;
+      algaeUniforms.uTime.value = clockTime;
+      moteUniforms.uTime.value = clockTime;
+
+      updateMouseState(dt);
+      updateBaitsAndBubbles(dt);
+      updateTucunare(tucunare, dt);
+
+      renderer.render(scene, camera);
+    }
+
+    requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>

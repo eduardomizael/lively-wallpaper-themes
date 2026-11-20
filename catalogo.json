@@ -41,5 +41,15 @@
       "preview.html", "Abrir-previa.cmd", "README.md", "app.js", "shaders.js", "style.css",
       "licenses/Hash-without-Sine-MIT.txt"
     ]
+  },
+  {
+    "id": "tucunare-lagoon",
+    "destino": "tucunare-lagoon",
+    "arquivos": [
+      "LivelyInfo.json", "LivelyProperties.json", "index.html", "thumbnail.jpg",
+      "preview.html", "Abrir-previa.cmd", "README.md",
+      "vendor/three.min.js", "vendor/three-LICENSE.txt",
+      "vendor/lil-gui.min.js", "vendor/lil-gui-LICENSE.md"
+    ]
   }
 ]

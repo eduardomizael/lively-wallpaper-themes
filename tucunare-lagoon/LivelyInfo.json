@@ -1,0 +1,14 @@
+{
+  "AppVersion": "1.0.0.0",
+  "Title": "Tucunaré Azul · Visão Isométrica 3D",
+  "Thumbnail": "thumbnail.jpg",
+  "Preview": "thumbnail.jpg",
+  "Desc": "Um tucunaré 3D em visão lateral-isométrica nadando em águas claras com cáusticas, raios de luz e comportamento realista de emboscada, patrulha e bote.",
+  "Author": "Eduardo Mizael Clemente",
+  "License": "MIT",
+  "Type": 1,
+  "FileName": "index.html",
+  "Arguments": "",
+  "IsAbsolutePath": false
+}
+

@@ -1,0 +1,57 @@
+{
+  "baseSpeed": {
+    "text": "Velocidade de Patrulha (%)",
+    "type": "slider",
+    "min": 40,
+    "max": 200,
+    "step": 5,
+    "value": 100
+  },
+  "ambushTendency": {
+    "text": "Tendência a Espairar / Emboscada (%)",
+    "type": "slider",
+    "min": 20,
+    "max": 180,
+    "step": 5,
+    "value": 100
+  },
+  "causticsIntensity": {
+    "text": "Intensidade das Cáusticas (%)",
+    "type": "slider",
+    "min": 0,
+    "max": 220,
+    "step": 5,
+    "value": 110
+  },
+  "sunbeamsIntensity": {
+    "text": "Raios de Luz Subaquáticos (%)",
+    "type": "slider",
+    "min": 0,
+    "max": 200,
+    "step": 5,
+    "value": 100
+  },
+  "fishScale": {
+    "text": "Tamanho do Tucunaré (%)",
+    "type": "slider",
+    "min": 60,
+    "max": 160,
+    "step": 5,
+    "value": 100
+  },
+  "showAlgae": {
+    "text": "Exibir algas no fundo",
+    "type": "checkbox",
+    "value": true
+  },
+  "interactiveMouse": {
+    "text": "Interação com o mouse (espreita, fuga e isca ao clicar)",
+    "type": "checkbox",
+    "value": true
+  },
+  "showGui": {
+    "text": "Exibir painel recolhido na tela",
+    "type": "checkbox",
+    "value": false
+  }
+}
