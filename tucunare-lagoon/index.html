@@ -64,6 +64,8 @@
     const isPreview = urlParams.has('preview');
     const isInspect = urlParams.has('inspect'); // Modo inspeção de perfil para validação visual
     const isInspectMouth = urlParams.has('mouth'); // Inspeção com a boca aberta
+    const inspectFish = urlParams.get('fish'); // '1', '2' ou null para exibir ambos
+    const inspectAngle = urlParams.get('angle');
 
     const params = {
       baseSpeed: 1.85,          // Velocidade de patrulha do tucunaré
@@ -75,7 +77,7 @@
       interactiveMouse: true,   // Espreita, fuga e isca ao clicar
       showGui: isPreview && !isInspect,
       dropBaitCenter: () => spawnBait((Math.random() - 0.5) * 8.0, (Math.random() - 0.5) * 2.8),
-      triggerStrike: () => triggerPredatorBurst(tucunare, 1.0)
+      triggerStrike: () => allFish.forEach(f => triggerPredatorBurst(f, 1.0))
     };
 
     // =========================================================================
@@ -106,13 +108,52 @@
       120
     );
     const CAM_BASE = isInspect
-      ? new THREE.Vector3(0, 3.2, 13.8)
+      ? (inspectFish === '2'
+        ? new THREE.Vector3(0, 0.35, 12.6)
+        : (inspectFish === '1' ? new THREE.Vector3(0, 3.2, 13.8) : new THREE.Vector3(0, 1.0, 15.2)))
       : new THREE.Vector3(0, 7.2, 21.2);
     const CAM_TARGET = isInspect
-      ? new THREE.Vector3(0, 0.0, 0)
+      ? (inspectFish === '2' ? new THREE.Vector3(0, -0.05, 0) : new THREE.Vector3(0, 0.0, 0))
       : new THREE.Vector3(0, -0.35, 0);
     camera.position.copy(CAM_BASE);
     camera.lookAt(CAM_TARGET);
+
+    const inspectOrbit = {
+      dragging: false,
+      lastX: 0,
+      lastY: 0,
+      yaw: 0,
+      pitch: 0,
+      zoom: 1.0
+    };
+    const inspectBaseOffset = CAM_BASE.clone().sub(CAM_TARGET);
+
+    if (isInspect) {
+      window.addEventListener('pointerdown', (e) => {
+        if (e.target.closest && e.target.closest('.lil-gui')) return;
+        inspectOrbit.dragging = true;
+        inspectOrbit.lastX = e.clientX;
+        inspectOrbit.lastY = e.clientY;
+      });
+      window.addEventListener('pointermove', (e) => {
+        if (!inspectOrbit.dragging) return;
+        const dx = e.clientX - inspectOrbit.lastX;
+        const dy = e.clientY - inspectOrbit.lastY;
+        inspectOrbit.lastX = e.clientX;
+        inspectOrbit.lastY = e.clientY;
+        inspectOrbit.yaw -= dx * 0.008;
+        inspectOrbit.pitch = THREE.MathUtils.clamp(inspectOrbit.pitch + dy * 0.007, -1.1, 1.1);
+      });
+      window.addEventListener('pointerup', () => {
+        inspectOrbit.dragging = false;
+      });
+      window.addEventListener('pointercancel', () => {
+        inspectOrbit.dragging = false;
+      });
+      window.addEventListener('wheel', (e) => {
+        inspectOrbit.zoom = THREE.MathUtils.clamp(inspectOrbit.zoom + e.deltaY * 0.0008, 0.55, 1.8);
+      }, { passive: true });
+    }
 
     const swimVolume = {
       halfX: 7.4,
@@ -368,7 +409,8 @@
     const algaeUniforms = {
       uTime: { value: 0 },
       uCausticsIntensity: { value: params.causticsIntensity },
-      uFishPos: { value: new THREE.Vector3(0, 0, 0) }
+      uFishPos: { value: new THREE.Vector3(0, 0, 0) },
+      uFishPos2: { value: new THREE.Vector3(99, 0, 99) }
     };
 
     function createAlgaeField() {
@@ -480,6 +522,7 @@
           attribute vec3 aParams;
           uniform float uTime;
           uniform vec3 uFishPos;
+          uniform vec3 uFishPos2;
 
           varying vec2 vUv;
           varying vec3 vWorldPos;
@@ -503,12 +546,18 @@
             // Compensa levemente a altura ao inclinar para manter o comprimento natural da folha
             p.y -= abs(swayMain) * bend * 0.16;
 
-            // Leve afastamento na esteira quando o tucunaré passa perto
+            // Leve afastamento na esteira quando qualquer tucunaré passa perto
             vec2 toBlade = p.xz - uFishPos.xz;
             float fDist = length(toBlade);
             if (fDist < 2.8 && fDist > 0.001) {
               float push = (1.0 - fDist / 2.8) * 0.35 * v * v;
               p.xz += (toBlade / fDist) * push;
+            }
+            vec2 toBlade2 = p.xz - uFishPos2.xz;
+            float fDist2 = length(toBlade2);
+            if (fDist2 < 2.8 && fDist2 > 0.001) {
+              float push2 = (1.0 - fDist2 / 2.8) * 0.35 * v * v;
+              p.xz += (toBlade2 / fDist2) * push2;
             }
 
             vec4 wp = modelMatrix * vec4(p, 1.0);
@@ -712,7 +761,22 @@
     // 4. ANATOMIA 3D ESCULPIDA DO TUCUNARÉ AZUL (Cichla piquiti)
     // =========================================================================
     const HEAD_Z = 2.25;
-    const BODY_LEN = 4.40; // z de +2.25 (focinho) até -2.15 (raiz da cauda)
+    const BODY_LEN = 4.09;
+    const PEDUNCLE_END_Z = HEAD_Z - BODY_LEN;
+    const CAUDAL_ROOT_Z = PEDUNCLE_END_Z + 0.10;
+    const CAUDAL_LEN = 1.08;
+    const EYE_Z = 1.65;
+    const EYE_Y = 0.215;
+    const MOUTH_END = 0.16;
+    const MOUTH_TIP_Y = -0.045;
+    const MOUTH_SLOPE = 2.53;
+    const MOUTH_SETTLE = 0.29;
+    const JAW_HINGE_Z = HEAD_Z - MOUTH_END * BODY_LEN;
+    const JAW_HINGE_Y = MOUTH_TIP_Y - MOUTH_SLOPE * MOUTH_END;
+
+    function operculumZ(y) {
+      return 1.06 + 0.43 * (y + 0.10) ** 2 + 0.19 * y;
+    }
 
     // Interpolação suave por tabela anatômica (Catmull-Rom 1D) para silhueta real de Tucunaré
     function sampleProfile(table, t) {
@@ -734,134 +798,161 @@
       );
     }
 
-    // Perfil dorsal (+Y): focinho robusto de bass/tucunaré (sem ponta fina!), testa firme, dorso alto e pedúnculo esguio
+    // Perfil dorsal (+Y): focinho baixo, testa arredondada e dorso arqueado.
     const DORSAL_TABLE = [
-      [0.00, 0.09],
-      [0.03, 0.19],
-      [0.08, 0.29],
-      [0.15, 0.42],
-      [0.24, 0.57],
-      [0.34, 0.68],
-      [0.48, 0.66],
-      [0.62, 0.55],
-      [0.75, 0.36],
-      [0.85, 0.21],
-      [0.94, 0.175],
-      [1.00, 0.195]
+      [0.00, 0.13],
+      [0.04, 0.22],
+      [0.09, 0.33],
+      [0.16, 0.52],
+      [0.24, 0.69],
+      [0.33, 0.79],
+      [0.46, 0.78],
+      [0.59, 0.68],
+      [0.71, 0.51],
+      [0.82, 0.34],
+      [0.92, 0.255],
+      [1.00, 0.255]
     ];
 
     // Perfil ventral (-Y): queixo arredondado e forte, garganta cheia, ventre suave e pedúnculo recortado
     const VENTRAL_TABLE = [
-      [0.00, 0.10],
-      [0.04, 0.22],
-      [0.11, 0.34],
-      [0.22, 0.46],
-      [0.36, 0.54],
-      [0.54, 0.50],
-      [0.68, 0.36],
-      [0.80, 0.20],
-      [0.94, 0.165],
-      [1.00, 0.185]
+      [0.00, 0.19],
+      [0.04, 0.33],
+      [0.10, 0.49],
+      [0.18, 0.62],
+      [0.28, 0.72],
+      [0.45, 0.73],
+      [0.59, 0.65],
+      [0.70, 0.52],
+      [0.82, 0.34],
+      [0.93, 0.24],
+      [1.00, 0.235]
     ];
 
     // Largura lateral (X): focinho largo de predador, ombros musculosos e ponta traseira afinando na cauda
     const WIDTH_TABLE = [
-      [0.00, 0.08],
-      [0.05, 0.18],
-      [0.15, 0.27],
-      [0.28, 0.35],
-      [0.44, 0.33],
-      [0.62, 0.235],
-      [0.78, 0.130],
-      [0.93, 0.062],
-      [0.985, 0.034],
-      [1.00, 0.012]
+      [0.00, 0.15],
+      [0.05, 0.204],
+      [0.15, 0.276],
+      [0.27, 0.392],
+      [0.43, 0.393],
+      [0.60, 0.325],
+      [0.76, 0.218],
+      [0.91, 0.115],
+      [0.978, 0.073],
+      [1.00, 0.0]
     ];
 
     const tucunareHeightUp = t => Math.max(0.02, sampleProfile(DORSAL_TABLE, t));
     const tucunareHeightDown = t => Math.max(0.02, sampleProfile(VENTRAL_TABLE, t));
-    const tucunareWidth = t => Math.max(0.01, sampleProfile(WIDTH_TABLE, t));
+    const tucunareWidth = t => Math.max(0.0, sampleProfile(WIDTH_TABLE, t));
 
     function createTucunareBodyGeometry() {
-      const lengthSegs = 96;
-      const radialSegs = 44;
+      const lengthSegs = 120;
+      const halfRingSegs = 24;
       const positions = [];
       const uvs = [];
+      const anatomy = [];
       const indices = [];
+      const mouthRings = [];
+      const stride = halfRingSegs + 1;
+      const halfSize = (lengthSegs + 1) * stride;
 
-      for (let i = 0; i <= lengthSegs; i++) {
-        const t = i / lengthSegs;
-        const baseZ = HEAD_Z - t * BODY_LEN;
-        const rx = tucunareWidth(t);
-        const ryUp = tucunareHeightUp(t);
-        const ryDown = tucunareHeightDown(t);
+      // As duas metades se encontram no flanco e se separam à frente da articulação.
+      for (const jaw of [1, -1]) {
+        const offset = jaw > 0 ? 0 : halfSize;
+        for (let i = 0; i <= lengthSegs; i++) {
+          const t = i / lengthSegs;
+          const baseZ = HEAD_Z - t * BODY_LEN;
+          const mouth = 1 - THREE.MathUtils.smoothstep(t, 0.093, MOUTH_END);
+          const noseRound = Math.sqrt(1 - (1 - Math.min(1, t / 0.026)) ** 2);
+          const lipAxis = (MOUTH_TIP_Y - MOUTH_SLOPE * Math.min(t, MOUTH_END)) *
+            (1 - THREE.MathUtils.smoothstep(t, MOUTH_END, MOUTH_SETTLE));
+          const lipY = lipAxis + jaw * 0.006 * mouth;
+          const rx = tucunareWidth(t) * THREE.MathUtils.lerp(0.79, 1, noseRound);
+          const endY = jaw > 0 ? tucunareHeightUp(t) : -tucunareHeightDown(t);
+          const lipZ = jaw < 0 ? 0.052 * (1 - THREE.MathUtils.smoothstep(t, 0.015, 0.115)) : 0;
+          const noseBow = 0.034 * (1 - THREE.MathUtils.smoothstep(t, 0, 0.040));
+          const faceSlope = 0.031 * (1 - THREE.MathUtils.smoothstep(t, 0, 0.08));
 
-        for (let j = 0; j <= radialSegs; j++) {
-          const v = j / radialSegs;
-          const theta = v * Math.PI * 2.0;
-          const cosT = Math.cos(theta);
-          const sinT = Math.sin(theta);
+          for (let j = 0; j <= halfRingSegs; j++) {
+            const v = (j / halfRingSegs + (jaw < 0 ? 1 : 0)) * 0.5;
+            const theta = v * Math.PI * 2;
+            const cosT = Math.cos(theta);
+            const sinAbs = Math.abs(Math.sin(theta));
+            const flankRadius = Math.pow(Math.abs(cosT), 0.86);
+            const lipRoll = jaw * 0.026 * sinAbs * (1 - sinAbs) * mouth * noseRound;
+            const z = baseZ + lipZ + noseBow * (1 - flankRadius ** 2) - faceSlope * sinAbs * noseRound;
+            const y = lipY + sinAbs * (endY - lipY) * noseRound + lipRoll;
+            const cheek = Math.exp(-(((z - operculumZ(y) - 0.12) / 0.22) ** 2 + ((y + 0.10) / 0.35) ** 2));
+            const gillFold = Math.exp(-(((z - operculumZ(y)) / 0.043) ** 2 + ((y + 0.11) / 0.32) ** 2));
+            const socket = Math.exp(-(((z - EYE_Z) / 0.115) ** 2 + ((y - EYE_Y) / 0.105) ** 2));
+            const lipRim = 0.013 * mouth * (1 - sinAbs) ** 5;
+            const x = Math.sign(cosT) * flankRadius *
+              (rx * (1 + 0.07 * jaw * sinAbs) + lipRim + 0.044 * cheek - 0.018 * gillFold - 0.031 * socket);
 
-          // Seção em gota: dorso/ombros mais cheios, flancos esguios e quilha ventral firme
-          const xSign = Math.sign(cosT);
-          const upperFullness = sinT > 0 ? 1.0 + 0.08 * Math.sin(sinT * Math.PI) : 1.0 - 0.10 * Math.pow(-sinT, 1.3);
-          let x = xSign * Math.pow(Math.abs(cosT), 0.86) * rx * upperFullness;
-          let y = sinT >= 0 ? sinT * ryUp : sinT * ryDown;
-          let z = baseZ;
+            positions.push(x, y, z);
+            uvs.push(t, v);
+            anatomy.push(jaw, 0);
 
-          // Fechamento arredondado do focinho na ponta frontal (evita tubo cortado!)
-          if (t < 0.04) {
-            const cap = Math.sqrt(Math.max(0.0, 1.0 - Math.pow(1.0 - t / 0.04, 2.0)));
-            x *= (0.35 + 0.65 * cap);
-            y *= (0.45 + 0.55 * cap);
+            if (i < lengthSegs && j < halfRingSegs) {
+              const a = offset + i * stride + j;
+              indices.push(a, a + stride, a + 1, a + stride, a + stride + 1, a + 1);
+            }
           }
 
-          // Mandíbula inferior prognata natural (lábio grosso e levemente avançado, SEM bico pontudo!)
-          if (t < 0.12 && sinT < 0.05) {
-            const jawU = Math.pow(1.0 - t / 0.12, 1.45);
-            const lowerMask = THREE.MathUtils.smoothstep(-sinT, -0.05, 0.55);
-            z += 0.072 * jawU * lowerMask;
-            y += 0.018 * jawU * lowerMask;
+          if (mouth > 0) {
+            const first = (offset + i * stride) * 3;
+            const last = first + halfRingSegs * 3;
+            mouthRings.push({ jaw, t, z: baseZ + lipZ, y: lipY, noseBow, left: positions[first], right: positions[last] });
           }
-
-          // Relevo do opérculo (tampa branquial) em t ~ 0.23..0.29
-          if (t > 0.20 && t < 0.31 && Math.abs(sinT) < 0.72) {
-            const opercBell = Math.exp(-Math.pow((t - 0.255) / 0.028, 2.0));
-            const vertMask = Math.cos(sinT * Math.PI * 0.65);
-            x += xSign * 0.024 * opercBell * Math.max(0, vertMask);
-          }
-
-          // Cavidade orbital natural para encaixar o olho na cabeça (z ~ 1.56, y ~ 0.18)
-          const dEyeZ = (z - 1.56) / 0.15;
-          const dEyeY = (y - 0.18) / 0.13;
-          const eyeDistSq = dEyeZ * dEyeZ + dEyeY * dEyeY;
-          if (eyeDistSq < 1.35 && Math.abs(cosT) > 0.45) {
-            const socket = Math.exp(-eyeDistSq * 2.2) * THREE.MathUtils.smoothstep(Math.abs(cosT), 0.45, 0.82);
-            x -= xSign * 0.040 * socket;
-          }
-
-          positions.push(x, y, z);
-          uvs.push(t, v);
         }
       }
 
-      const stride = radialSegs + 1;
-      for (let i = 0; i < lengthSegs; i++) {
-        for (let j = 0; j < radialSegs; j++) {
-          const a = i * stride + j;
-          const b = (i + 1) * stride + j;
-          const c = (i + 1) * stride + (j + 1);
-          const d = i * stride + (j + 1);
-          indices.push(a, b, d);
-          indices.push(b, c, d);
+      // Céu da boca e assoalho acompanham cada maxila e fecham a cavidade por dentro.
+      const palateSegs = 12;
+      for (let i = 0; i < mouthRings.length; i++) {
+        const { jaw, t, z, y, noseBow, left, right } = mouthRings[i];
+        const row = positions.length / 3;
+        for (let j = 0; j <= palateSegs; j++) {
+          const v = j / palateSegs;
+          const span = 2 * v - 1;
+          const arch = Math.sin(v * Math.PI) * THREE.MathUtils.smoothstep(t, 0.012, 0.063);
+          positions.push(THREE.MathUtils.lerp(left, right, v), y + jaw * 0.102 * arch, z + noseBow * (1 - span * span));
+          uvs.push(t, v);
+          anatomy.push(jaw, 1);
+          if (j < palateSegs && mouthRings[i + 1]?.jaw === jaw) {
+            const a = row + j;
+            const b = a + palateSegs + 1;
+            indices.push(a, a + 1, b, b, a + 1, b + 1);
+          }
         }
       }
 
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setAttribute('anatomy', new THREE.Float32BufferAttribute(anatomy, 2));
       geo.setIndex(indices);
       geo.computeVertexNormals();
+
+      // Une as normais nos flancos atrás dos cantos da boca.
+      const normals = geo.getAttribute('normal');
+      const normal = new THREE.Vector3();
+      const other = new THREE.Vector3();
+      for (let i = 0; i <= lengthSegs; i++) {
+        const join = THREE.MathUtils.smoothstep(i / lengthSegs, 0.113, MOUTH_END);
+        for (const j of [0, halfRingSegs]) {
+          const a = i * stride + j;
+          const b = halfSize + i * stride + halfRingSegs - j;
+          normal.fromBufferAttribute(normals, a);
+          other.fromBufferAttribute(normals, b);
+          normal.lerp(other, join * 0.5).normalize();
+          other.lerp(normal, join).normalize();
+          normals.setXYZ(a, normal.x, normal.y, normal.z);
+          normals.setXYZ(b, other.x, other.y, other.z);
+        }
+      }
       return geo;
     }
 
@@ -872,9 +963,6 @@
       const positions = [];
       const uvs = [];
       const indices = [];
-      const baseZ = -1.94; // Sobrepõe suavemente o final do pedúnculo (-2.15) para junção sem emenda
-      const tailLen = 1.54;
-
       for (let i = 0; i <= segU; i++) {
         const u = i / segU;
         for (let j = 0; j <= segV; j++) {
@@ -882,12 +970,12 @@
           const side = (v - 0.5) * 2.0; // -1 inferior, +1 superior
           const absSide = Math.abs(side);
 
-          const spreadY = 0.175 + Math.pow(u, 0.70) * 0.54;
-          const cornerRound = 0.22 * Math.pow(absSide, 2.35) * u;
-          const rearCurve = -0.045 * (1.0 - absSide * absSide) * Math.pow(u, 1.3);
+          const spreadY = 0.208 + Math.pow(u, 0.87) * (0.60 + side * 0.026);
+          const cornerRound = 0.165 * Math.pow(absSide, 4.5) * u;
+          const rearCurve = -0.035 * (1.0 - absSide * absSide) * u;
 
-          const z = baseZ - u * tailLen + cornerRound + rearCurve;
-          const y = side * spreadY;
+          const z = CAUDAL_ROOT_Z - u * CAUDAL_LEN + cornerRound + rearCurve;
+          const y = side * spreadY + 0.012;
           // Ligeira curvatura 3D suave na membrana (evita parecer papel rígido)
           const x = Math.sin(v * Math.PI * 2.0) * 0.012 * u;
 
@@ -918,33 +1006,33 @@
 
     // Dorsal Anterior Espinhosa (14 espinhos individuais com membrana recortada + entalhe final)
     function createSpinyDorsalGeometry() {
-      const segU = 56;
+      const segU = 112;
       const segV = 10;
       const positions = [];
       const uvs = [];
       const indices = [];
-      const startZ = 0.72;
-      const endZ = -0.44;
+      const startZ = 0.87;
+      const endZ = -0.57;
 
       for (let i = 0; i <= segU; i++) {
         const u = i / segU;
         const z = THREE.MathUtils.lerp(startZ, endZ, u);
         const tBody = (HEAD_Z - z) / BODY_LEN;
-        const baseY = tucunareHeightUp(tBody) * 0.88;
+        const baseY = tucunareHeightUp(tBody) * 0.94;
 
         // Sobe rápido nos primeiros espinhos, mantém crista imponente e faz o entalhe característico antes da dorsal mole
-        const frontRise = THREE.MathUtils.smoothstep(u, 0.0, 0.14);
-        const rearNotch = 1.0 - 0.72 * Math.pow(THREE.MathUtils.smoothstep(u, 0.58, 1.0), 1.3);
-        const envelope = (0.14 + 0.37 * frontRise) * rearNotch;
+        const frontRise = THREE.MathUtils.smoothstep(u, 0.0, 0.18);
+        const rearNotch = 1.0 - 0.80 * Math.pow(THREE.MathUtils.smoothstep(u, 0.33, 1.0), 0.93);
+        const envelope = (0.035 + 0.59 * frontRise) * rearNotch;
 
         // 14 espinhos serrilhados com membrana côncava entre as pontas
         const spinePhase = (u * 14.0) % 1.0;
-        const scallop = 0.82 + 0.18 * Math.pow(Math.abs(spinePhase * 2.0 - 1.0), 1.4);
+        const scallop = 0.77 + 0.23 * Math.pow(1 - Math.abs(spinePhase * 2 - 1), 1.55);
         const finHeight = envelope * scallop;
 
         for (let j = 0; j <= segV; j++) {
           const v = j / segV;
-          positions.push(0, baseY + v * finHeight, z - v * (0.20 + 0.12 * u));
+          positions.push(0, baseY + v * finHeight, z - v * finHeight * 0.47);
           uvs.push(u, v);
         }
       }
@@ -971,24 +1059,24 @@
 
     // Dorsal Posterior Mole (leque arredondado iridescente azulado com pintas)
     function createSoftDorsalGeometry() {
-      const segU = 26;
+      const segU = 32;
       const segV = 10;
       const positions = [];
       const uvs = [];
       const indices = [];
-      const startZ = -0.42;
-      const endZ = -1.46;
+      const startZ = -0.49;
+      const endZ = -1.44;
 
       for (let i = 0; i <= segU; i++) {
         const u = i / segU;
         const z = THREE.MathUtils.lerp(startZ, endZ, u);
         const tBody = (HEAD_Z - z) / BODY_LEN;
-        const baseY = tucunareHeightUp(tBody) * 0.86;
-        const finHeight = Math.sin(Math.pow(u, 0.72) * Math.PI) * 0.50 + 0.04;
+        const baseY = tucunareHeightUp(tBody) * 0.91;
+        const finHeight = Math.pow(Math.sin(Math.pow(u, 0.89) * Math.PI), 0.62) * 0.54 + 0.035;
 
         for (let j = 0; j <= segV; j++) {
           const v = j / segV;
-          const sweep = v * (0.28 + 0.22 * u);
+          const sweep = v * finHeight * (0.68 + 0.79 * u);
           positions.push(0, baseY + v * finHeight, z - sweep);
           uvs.push(u, v);
         }
@@ -1021,19 +1109,19 @@
       const positions = [];
       const uvs = [];
       const indices = [];
-      const startZ = -0.52;
+      const startZ = -0.58;
       const endZ = -1.46;
 
       for (let i = 0; i <= segU; i++) {
         const u = i / segU;
         const z = THREE.MathUtils.lerp(startZ, endZ, u);
         const tBody = (HEAD_Z - z) / BODY_LEN;
-        const baseY = -tucunareHeightDown(tBody) * 0.85;
-        const finDepth = Math.sin(Math.pow(u, 0.72) * Math.PI) * 0.45 + 0.04;
+        const baseY = -tucunareHeightDown(tBody) * 0.91;
+        const finDepth = Math.pow(Math.sin(Math.pow(u, 0.79) * Math.PI), 0.66) * 0.48 + 0.03;
 
         for (let j = 0; j <= segV; j++) {
           const v = j / segV;
-          positions.push(0, baseY - v * finDepth, z - v * (0.26 + 0.20 * u));
+          positions.push(0, baseY - v * finDepth, z - v * finDepth * (0.70 + 0.76 * u));
           uvs.push(u, v);
         }
       }
@@ -1068,16 +1156,16 @@
 
       for (let i = 0; i <= segU; i++) {
         const u = i / segU;
-        const heightSpan = 0.14 + Math.sin(Math.pow(u, 0.66) * Math.PI) * 0.42 + 0.05 * u;
-        const reachX = Math.pow(u, 0.85) * 0.58;
-        const sweepBack = Math.pow(u, 1.02) * 0.82;
+        const heightSpan = 0.093 + 0.48 * Math.sin(Math.pow(u, 0.93) * Math.PI);
+        const reachX = Math.pow(u, 0.85) * 0.52;
+        const sweepBack = Math.pow(u, 1.02) * 0.84;
 
         for (let j = 0; j <= segV; j++) {
           const v = j / segV;
           const cup = Math.sin(v * Math.PI) * 0.06 * u;
           const localX = sideSign * (reachX + cup);
-          const localY = (0.42 - v) * heightSpan - u * 0.18;
-          const localZ = -sweepBack + (0.5 - v) * 0.14 * u;
+          const localY = (0.53 - v) * heightSpan - u * 0.045;
+          const localZ = -sweepBack + Math.pow(v, 2.3) * 0.23 * u;
           positions.push(localX, localY, localZ);
           uvs.push(u, v);
         }
@@ -1118,17 +1206,16 @@
 
       for (let i = 0; i <= segU; i++) {
         const u = i / segU;
-        const chord = 0.14 + Math.sin(Math.pow(u, 0.62) * Math.PI) * 0.36;
-        const reachX = u * 0.14;
-        const dropY = -Math.pow(u, 0.85) * 0.40;
-        const sweepBack = Math.pow(u, 1.05) * 0.72;
+        const reach = Math.pow(u, 0.92);
 
         for (let j = 0; j <= segV; j++) {
           const v = j / segV;
+          const depth = 0.56 + 0.18 * Math.sin(v * Math.PI) - 0.41 * v ** 2;
+          const sweep = 0.13 + 0.50 * v;
           positions.push(
-            sideSign * (reachX + (0.5 - v) * 0.03),
-            dropY + (0.5 - v) * chord * 0.68,
-            -sweepBack - v * chord * 0.42
+            sideSign * (reach * (0.17 + 0.13 * (1 - v)) + (0.5 - v) * 0.03),
+            -reach * depth + (0.5 - v) * 0.047,
+            -reach * sweep - v * 0.058
           );
           uvs.push(u, v);
         }
@@ -1169,16 +1256,15 @@
       pectR: createPectoralFinGeometry(-1),
       pelvL: createPelvicFinGeometry(1),
       pelvR: createPelvicFinGeometry(-1),
-      eyeL: new THREE.SphereGeometry(0.094, 18, 14).scale(0.60, 1.0, 1.0),
-      eyeR: new THREE.SphereGeometry(0.094, 18, 14).scale(0.60, 1.0, 1.0)
+      eye: new THREE.SphereGeometry(0.108, 24, 16).scale(0.71, 1.0, 1.0)
     };
 
-    const pectLPivot = new THREE.Vector3(0.30, -0.15, 0.96);
-    const pectRPivot = new THREE.Vector3(-0.30, -0.15, 0.96);
-    const pelvLPivot = new THREE.Vector3(0.09, -0.45, 0.66);
-    const pelvRPivot = new THREE.Vector3(-0.09, -0.45, 0.66);
-    const eyeLPos = new THREE.Vector3(0.215, 0.18, 1.56);
-    const eyeRPos = new THREE.Vector3(-0.215, 0.18, 1.56);
+    const pectLPivot = new THREE.Vector3(0.357, -0.18, 0.99);
+    const pectRPivot = new THREE.Vector3(-0.357, -0.18, 0.99);
+    const pelvLPivot = new THREE.Vector3(0.098, -0.66, 0.71);
+    const pelvRPivot = new THREE.Vector3(-0.098, -0.66, 0.71);
+    const eyeLPos = new THREE.Vector3(0.208, EYE_Y, EYE_Z);
+    const eyeRPos = new THREE.Vector3(-0.208, EYE_Y, EYE_Z);
 
     // =========================================================================
     // 5. SHADERS REALISTAS DO TUCUNARÉ AZUL (ESCAMAS COM BUMP + IRIDESCÊNCIA + 5 BARRAS + OCELO)
@@ -1196,8 +1282,12 @@
       uniform float uIdleDriftPhase;
       uniform float uMouthOpen;
 
+      float fishLengthFraction(float z) {
+        return clamp((${HEAD_Z} - z) / ${HEAD_Z - CAUDAL_ROOT_Z + CAUDAL_LEN + 0.035}, 0.0, 1.0);
+      }
+
       float spineOffsetX(float z) {
-        float s = clamp((2.25 - z) / 5.95, 0.0, 1.0);
+        float s = fishLengthFraction(z);
         // Propulsão subcarangiforme: cabeça firme de predador, onda cresce a partir do meio do corpo
         float wave = sin(uSwimPhase - s * 4.9);
         float amp = uTailAmp * (0.006 + 0.994 * pow(max(0.0, s - 0.10) / 0.90, 2.05));
@@ -1212,41 +1302,10 @@
       }
 
       vec3 deformFishPosition(vec3 p) {
-        // Respiração branquial suave no opérculo + expansão bucal ao dar o bote (sucção!)
-        float gillMask = exp(-pow((p.z - 1.22) * 4.2, 2.0));
+        // Expansão dos opérculos na respiração e durante o bote.
+        float gillDist = (p.z - 1.19) * 4.0;
+        float gillMask = exp(-gillDist * gillDist);
         p.x *= (1.0 + gillMask * (0.042 * sin(uBreathPhase) + 0.11 * uMouthOpen));
-
-        // Abertura articulada da boca para comer (mandíbula inferior gira na articulação + pré-maxila avança!)
-        float mouthLineY = -0.15 + (p.z - 1.58) * 0.24;
-        float jawRegion = smoothstep(1.50, 1.76, p.z);
-        if (uMouthOpen > 0.001 && jawRegion > 0.001) {
-          vec2 hinge = vec2(1.52, -0.15);
-          vec2 rel = vec2(p.z - hinge.x, p.y - hinge.y);
-          float isLower = smoothstep(0.03, -0.04, p.y - mouthLineY);
-          float isUpper = smoothstep(-0.03, 0.05, p.y - mouthLineY);
-
-          // Mandíbula inferior abre para baixo (~30° no pico do bote)
-          float angLow = uMouthOpen * 0.50 * jawRegion * isLower;
-          float cL = cos(angLow), sL = sin(angLow);
-          vec2 rotLow = vec2(rel.x * cL + rel.y * sL, -rel.x * sL + rel.y * cL);
-
-          // Maxila superior projeta levemente para frente e inclina para cima (protrusão real de Cichla!)
-          float angUp = uMouthOpen * 0.14 * jawRegion * isUpper;
-          float cU = cos(angUp), sU = sin(angUp);
-          vec2 rotUp = vec2(rel.x * cU - rel.y * sU + 0.055 * uMouthOpen * jawRegion * isUpper, rel.x * sU + rel.y * cU);
-
-          vec2 blended = mix(rel, rotLow, isLower);
-          blended = mix(blended, rotUp, isUpper);
-          // Recua o miolo entre os lábios para dentro criando profundidade real da cavidade bucal
-          float cavityRecess = exp(-pow((p.y - mouthLineY) / 0.055, 2.0)) * smoothstep(1.68, 2.15, p.z) * uMouthOpen;
-          p.z = hinge.x + blended.x - cavityRecess * 0.26;
-          p.y = hinge.y + blended.y;
-        } else {
-          // Leve movimento rítmico da mandíbula inferior ao respirar
-          float mouthMask = smoothstep(1.75, 2.25, p.z) * smoothstep(0.02, -0.14, p.y);
-          p.y -= mouthMask * (0.016 * (0.5 + 0.5 * sin(uBreathPhase - 0.7)));
-        }
-
         p.x += spineOffsetX(p.z);
         return p;
       }
@@ -1268,6 +1327,9 @@
           ...fishUniforms
         },
         vertexShader: /* glsl */ `
+          attribute vec2 anatomy;
+          varying vec2 vUv;
+          varying float vOralSurface;
           varying vec3 vObjPos;
           varying vec3 vWorldPos;
           varying vec3 vWorldNormal;
@@ -1275,9 +1337,23 @@
           ${FISH_DEFORM_GLSL}
 
           void main() {
+            vUv = uv;
+            vOralSurface = anatomy.y;
             vObjPos = position;
-            vec3 deformedPos = deformFishPosition(position);
-            vec3 deformedNorm = deformFishNormal(position, normal);
+            vec3 p = position;
+            vec3 n = normal;
+            float upper = step(0.0, anatomy.x);
+            float jawWeight = 1.0 - smoothstep(0.065, ${MOUTH_END}, uv.x);
+            float jawMotion = uMouthOpen * jawWeight;
+            float breath = (1.0 - upper) * jawWeight * (0.005 + 0.005 * sin(uBreathPhase));
+            float angle = mix(-0.59, 0.12, upper) * jawMotion - breath;
+            mat2 jawRotation = mat2(cos(angle), sin(angle), -sin(angle), cos(angle));
+            vec2 hinge = vec2(${JAW_HINGE_Z}, ${JAW_HINGE_Y});
+            p.zy = hinge + jawRotation * (p.zy - hinge);
+            p.z += jawMotion * mix(-0.15, 0.066, upper);
+            n.zy = jawRotation * n.zy;
+            vec3 deformedPos = deformFishPosition(p);
+            vec3 deformedNorm = deformFishNormal(p, n);
 
             vec4 wp = modelMatrix * vec4(deformedPos, 1.0);
             vWorldPos = wp.xyz;
@@ -1289,7 +1365,8 @@
         fragmentShader: /* glsl */ `
           uniform float uTime;
           uniform float uCausticsIntensity;
-          uniform float uMouthOpen;
+          varying vec2 vUv;
+          varying float vOralSurface;
           varying vec3 vObjPos;
           varying vec3 vWorldPos;
           varying vec3 vWorldNormal;
@@ -1313,172 +1390,163 @@
             return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
           }
 
-          float fbm(vec2 p) {
-            float v = 0.0;
-            float a = 0.52;
-            mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
-            for (int i = 0; i < 4; i++) {
-              v += a * noise2D(p);
-              p = rot * p * 2.05;
-              a *= 0.5;
-            }
-            return v;
+          float bell(float x) {
+            return exp(-x * x);
           }
 
-          // Escamas imbricadas (sobrepostas em meia-lua/diamante) retornando (altura, brilho, borda)
-          vec3 fishScalePattern(vec2 uv) {
-            vec2 g1 = uv;
-            vec2 f1 = fract(g1) - vec2(0.5, 0.5);
-            vec2 id1 = floor(g1);
+          // Bordas sobrepostas em fileiras alternadas, com relevo concentrado atrás da escama.
+          vec3 fishScalePattern(vec2 grid) {
+            float row = floor(grid.y);
+            vec2 coord = vec2(grid.x + mod(row, 2.0) * 0.5, grid.y);
+            vec2 cell = floor(coord);
+            vec2 p = fract(coord);
+            float arch = 0.68 - 0.89 * (p.y - 0.5) * (p.y - 0.5);
+            float distanceToEdge = fract(p.x - arch + 0.5) - 0.5;
+            float ridge = bell(distanceToEdge / 0.106);
+            float plate = smoothstep(0.0, 0.5, -distanceToEdge) * (0.75 + 0.25 * sin(p.y * 3.14159));
+            return vec3(plate, ridge, hash21(cell));
+          }
 
-            vec2 g2 = uv + vec2(0.5, 0.5);
-            vec2 f2 = fract(g2) - vec2(0.5, 0.5);
-            vec2 id2 = floor(g2);
+          float darkBar(float z, float y, float center, float width, float lowerEnd, float grain) {
+            float along = smoothstep(lowerEnd - 0.025, lowerEnd + 0.20, y + grain * 0.20);
+            float taper = mix(0.62, 1.13, smoothstep(lowerEnd, 0.48, y));
+            float lean = (y - 0.36) * (center < -0.65 ? -0.23 : 0.12);
+            float distanceToSide = abs(z - center + lean) / (width * taper);
+            return (1.0 - smoothstep(0.64, 1.18, distanceToSide)) * along;
+          }
 
-            // Escama sobreposta: escolhe a célula cujo centro está mais próximo (formato em arco)
-            float d1 = length(f1 * vec2(1.05, 0.92));
-            float d2 = length(f2 * vec2(1.05, 0.92));
-            bool useFirst = d1 < d2;
-            vec2 f = useFirst ? f1 : f2;
-            vec2 id = useFirst ? id1 : id2;
-            float d = useFirst ? d1 : d2;
-
-            float height = smoothstep(0.56, 0.14, d) * (0.75 + 0.25 * (0.5 - f.x));
-            float rim = smoothstep(0.49, 0.36, d) - smoothstep(0.36, 0.24, d);
-            float randVal = hash21(id * 1.37 + vec2(4.1, 2.7));
-            return vec3(height, randVal, rim);
+          float oval(vec2 xy, vec2 center, vec2 radius) {
+            vec2 p = (xy - center) / radius;
+            return exp(-dot(p, p));
           }
 
           void main() {
             vec3 Ngeom = normalize(vWorldNormal);
             vec3 V = normalize(cameraPosition - vWorldPos);
-            vec3 L = normalize(vec3(-0.28, 0.92, 0.44));
+            vec3 L = normalize(vec3(-0.38, 0.82, 0.43));
+            vec3 H = normalize(L + V);
+            float t = vUv.x;
+            float y = vObjPos.y;
+            float z = vObjPos.z;
+            vec2 flank = vObjPos.zy;
+            float head = 1.0 - smoothstep(0.20, 0.31, t);
 
-            float t = clamp((2.25 - vObjPos.z) / 4.40, 0.0, 1.0);
-            float h = clamp(vObjPos.y / 0.66, -1.0, 1.0);
+            float mottle = noise2D(flank * vec2(7.9, 9.5));
+            float grain = noise2D(flank * vec2(26.0, 28.0));
+            float cloud = noise2D(flank * vec2(2.8, 4.1));
+            float flankLight = (mottle - 0.5) * 0.50 + (cloud - 0.5) * 0.50;
 
-            // Mapeamento de escamas: maiores no flanco, mais finas no pedúnculo e quase lisas no focinho
-            float headSmooth = smoothstep(0.29, 0.14, t);
-            float scaleDensity = mix(11.5, 16.0, smoothstep(0.65, 0.98, t));
-            vec2 scaleUv = vec2(vObjPos.z * scaleDensity, vObjPos.y * (scaleDensity * 1.15));
-            vec3 sc = fishScalePattern(scaleUv);
-            float scaleAmt = mix(1.0, 0.18, headSmooth);
+            vec3 oliveBack = vec3(0.22, 0.31, 0.21);
+            vec3 blueShoulder = vec3(0.39, 0.54, 0.38);
+            vec3 flankGold = vec3(0.77, 0.70, 0.27);
+            vec3 lowerFlank = vec3(0.86, 0.69, 0.30);
+            vec3 silverBelly = vec3(0.82, 0.80, 0.63);
+            float colorY = y + flankLight * 0.14;
+            vec3 albedo = mix(flankGold, blueShoulder, smoothstep(0.06, 0.48, colorY));
+            albedo = mix(albedo, oliveBack, smoothstep(0.42, 0.72, colorY));
+            albedo = mix(albedo, lowerFlank, 1.0 - smoothstep(-0.41, -0.07, colorY));
+            albedo = mix(albedo, silverBelly, 1.0 - smoothstep(-0.55, -0.38, colorY));
 
-            // Bump mapping real por escama usando derivadas de tela (dFdx/dFdy) -> luz cintilante em cada escama!
-            float bumpH = sc.x * 0.042 * scaleAmt;
+            float cheek = oval(flank, vec2(1.37, -0.13), vec2(0.62, 0.33));
+            albedo = mix(albedo, vec3(0.86, 0.71, 0.29), cheek * 0.84);
+            float throat = oval(flank, vec2(1.23, -0.42), vec2(0.95, 0.12));
+            albedo = mix(albedo, vec3(0.84, 0.43, 0.21), throat * 0.69);
+            float peduncle = smoothstep(0.81, 1.0, t);
+            albedo = mix(albedo, mix(vec3(0.56, 0.49, 0.24), vec3(0.35, 0.46, 0.32),
+              smoothstep(-0.12, 0.09, y)), peduncle * 0.80);
+            albedo *= 1.0 + flankLight * 0.36;
+
+            // Barras de comprimentos diferentes e manchas quebradas sobre a bochecha.
+            float warp = (mottle - 0.5) * 0.15 + (grain - 0.5) * 0.065;
+            float bz = z + warp;
+            float marks = darkBar(bz, y, 0.83, 0.145, -0.21, mottle - 0.5);
+            marks = max(marks, darkBar(bz, y, 0.23, 0.145, -0.31, mottle - 0.5));
+            marks = max(marks, darkBar(bz, y, -0.46, 0.161, -0.20, mottle - 0.5));
+            marks = max(marks, darkBar(bz, y, -0.99, 0.13, -0.17, mottle - 0.5));
+            marks = max(marks, darkBar(bz, y, -1.39, 0.095, -0.10, mottle - 0.5) * 0.83);
+
+            float freckles = oval(flank, vec2(1.24, 0.015), vec2(0.31, 0.18)) *
+              smoothstep(0.40, 0.75, mottle * 0.65 + grain * 0.61);
+            float cheekPatch = oval(vec2(bz, y + warp * 0.6), vec2(1.29, 0.09), vec2(0.23, 0.077));
+            freckles = max(freckles, cheekPatch * smoothstep(0.28, 0.69, grain + 0.13));
+            float shoulderMarks = oval(flank, vec2(0.91, -0.13), vec2(0.18, 0.19)) *
+              smoothstep(0.53, 0.75, mottle + grain * 0.32);
+            marks = max(marks, max(freckles * 1.27, shoulderMarks));
+            vec3 pigment = mix(vec3(0.052, 0.079, 0.068), vec3(0.15, 0.17, 0.095), grain);
+            albedo = mix(albedo, pigment, min(1.0, marks) * 0.94);
+
+            // Linha lateral, dobra do opérculo e contorno do olho.
+            float latLineY = 0.10 + 0.16 * sin(clamp((t - 0.23) / 0.55, 0.0, 1.0) * 3.14159);
+            float lateral = bell((y - latLineY) / 0.009) * smoothstep(0.28, 0.36, t) *
+              (1.0 - smoothstep(0.67, 0.74, t));
+            albedo *= 1.0 - lateral * (0.13 + 0.19 * grain);
+
+            float gillZ = 1.06 + 0.43 * (y + 0.10) * (y + 0.10) + 0.19 * y;
+            float gillLength = smoothstep(-0.46, -0.30, y) * (1.0 - smoothstep(0.16, 0.36, y));
+            float gillFold = bell((z - gillZ) / 0.020) * gillLength;
+            float gillRim = bell((z - gillZ - 0.033) / 0.025) * gillLength;
+            albedo = mix(albedo, vec3(0.28, 0.16, 0.079), gillFold * 0.58);
+            albedo = mix(albedo, vec3(0.81, 0.71, 0.42), gillRim * 0.32);
+            float eyeSocket = oval(flank, vec2(${EYE_Z}, ${EYE_Y}), vec2(0.138, 0.119));
+            float nostril = oval(flank, vec2(1.89, 0.119), vec2(0.026, 0.018));
+            albedo *= 1.0 - eyeSocket * 0.29 - nostril * 0.55;
+            albedo += vec3(0.12, 0.091, 0.047) *
+              oval(flank, vec2(${EYE_Z}, ${EYE_Y + 0.093}), vec2(0.145, 0.041)) * (1.0 - eyeSocket);
+            albedo *= 1.0 + head * (grain - 0.5) * 0.16;
+
+            // O ocelo fica sobre a pele no pedúnculo, antes da membrana da cauda.
+            vec2 oc = (flank - vec2(${CAUDAL_ROOT_Z + 0.074}, 0.051)) / vec2(0.113, 0.108);
+            float ocDist = length(oc) + (grain - 0.5) * 0.12;
+            float ring = 1.0 - smoothstep(0.86, 1.13, ocDist);
+            float core = 1.0 - smoothstep(0.65, 0.78, ocDist);
+            albedo = mix(albedo, vec3(0.94, 0.79, 0.36), ring * 0.96);
+            albedo = mix(albedo, vec3(0.026, 0.043, 0.037), core);
+
+            float lipY = (${MOUTH_TIP_Y} - ${MOUTH_SLOPE} * min(t, ${MOUTH_END})) *
+              (1.0 - smoothstep(${MOUTH_END}, ${MOUTH_SETTLE}, t));
+            float lipMask = 1.0 - smoothstep(0.102, ${MOUTH_END}, t);
+            float lips = bell((y - lipY) / 0.050) * lipMask;
+            float lipHighlight = bell((y - lipY + 0.026) / 0.022) * lipMask;
+            albedo = mix(albedo, vec3(0.78, 0.52, 0.25), lips * 0.62);
+            albedo += vec3(0.074, 0.046, 0.022) * lipHighlight;
+
+            // Filtra o relevo quando o peixe está longe e poupa detalhes no focinho.
+            vec2 grid = vec2(t * (77.0 + 9.0 * t), vUv.y * 48.0);
+            vec3 scales = fishScalePattern(grid);
+            float scaleFade = (1.0 - smoothstep(0.30, 0.82, max(fwidth(grid.x), fwidth(grid.y)))) *
+              mix(1.0, 0.09, head) * mix(1.0, 0.36, ring);
+            albedo *= 1.0 + scaleFade * ((scales.z - 0.5) * 0.14 + scales.x * 0.060 - scales.y * 0.061);
+            float height = (scales.x + scales.y * 0.21) * scaleFade * 0.007;
             vec3 dPdx = dFdx(vWorldPos);
             vec3 dPdy = dFdy(vWorldPos);
-            float dHdx = dFdx(bumpH);
-            float dHdy = dFdy(bumpH);
-            vec3 surfGrad = normalize(cross(dPdy, Ngeom)) * dHdx + normalize(cross(Ngeom, dPdx)) * dHdy;
-            vec3 N = normalize(Ngeom - surfGrad * 9.5);
+            vec3 surfaceGradient = normalize(cross(dPdy, Ngeom)) * dFdx(height) +
+              normalize(cross(Ngeom, dPdx)) * dFdy(height);
+            vec3 N = normalize(Ngeom - surfaceGradient * 8.0);
 
-            // Paleta realista de Tucunaré Azul (Cichla piquiti)
-            vec3 dorsalOlive = vec3(0.16, 0.23, 0.12);
-            vec3 upperBronze = vec3(0.34, 0.43, 0.20);
-            vec3 flankGoldGreen = vec3(0.54, 0.63, 0.30);
-            vec3 lowerSilverGold = vec3(0.74, 0.78, 0.62);
-            vec3 bellyPearl = vec3(0.86, 0.87, 0.78);
-            vec3 cheekGold = vec3(0.64, 0.69, 0.22);
-            vec3 jawAmber = vec3(0.78, 0.56, 0.22);
+            float diff = max(dot(N, L), 0.0);
+            float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.2);
+            float glint = pow(max(dot(N, H), 0.0), 29.0) * 0.115 +
+              pow(max(dot(N, H), 0.0), 76.0) * (0.09 + scaleFade * scales.x * 0.20);
+            vec3 illumination = mix(vec3(0.49, 0.60, 0.58), vec3(0.78, 0.86, 0.83), Ngeom.y * 0.5 + 0.5);
+            vec3 color = albedo * (illumination + vec3(0.56, 0.53, 0.43) * diff);
+            float sheen = smoothstep(0.05, 0.62, y) * (0.28 + 0.72 * (1.0 - head));
+            color += vec3(0.31, 0.62, 0.72) * (fresnel * 0.095 + sheen * (0.10 + glint * 0.63));
+            color += vec3(1.0, 0.97, 0.84) * glint * (1.0 - core * 0.82);
 
-            float macroVar = fbm(vec2(vObjPos.z * 2.1, vObjPos.y * 2.8));
-            vec3 albedo = mix(flankGoldGreen, upperBronze, smoothstep(0.12, 0.55, h));
-            albedo = mix(albedo, dorsalOlive, smoothstep(0.45, 0.88, h));
-            albedo = mix(albedo, lowerSilverGold, smoothstep(-0.08, -0.48, h));
-            albedo = mix(albedo, bellyPearl, smoothstep(-0.42, -0.84, h));
+            float caustics = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
+            color += vec3(0.38, 0.80, 0.73) * caustics * 0.17 * uCausticsIntensity *
+              smoothstep(-0.22, 0.76, Ngeom.y);
 
-            // Bochecha e cabeça verde-dourado metálico + queixo levemente dourado/âmbar
-            albedo = mix(albedo, cheekGold, headSmooth * smoothstep(-0.55, 0.32, h) * 0.62);
-            float chinMask = smoothstep(0.28, 0.04, t) * smoothstep(-0.18, -0.70, h);
-            albedo = mix(albedo, jawAmber, chinMask * 0.44);
-
-            // Brilho individual por escama (mosaico dourado-esverdeado cintilante entre as barras)
-            float flankZone = smoothstep(-0.42, 0.05, h) * smoothstep(0.78, 0.22, h) * smoothstep(0.22, 0.34, t);
-            vec3 scaleFlashCol = mix(vec3(0.92, 0.96, 0.74), vec3(0.55, 0.88, 0.94), smoothstep(0.58, 0.95, t));
-            albedo = mix(albedo, scaleFlashCol, sc.x * smoothstep(0.52, 0.86, sc.y) * flankZone * 0.42);
-
-            // 5 barras verticais orgânicas do Tucunaré Azul descendo desde o topo do dorso (não ovais flutuantes!)
-            float warpZ = (fbm(vec2(vObjPos.z * 3.0, vObjPos.y * 2.4)) - 0.5) * 0.13;
-            float zW = vObjPos.z + warpZ;
-            // Mais largas no dorso e afinando suavemente em cunha para baixo
-            float barW = mix(0.085, 0.22, smoothstep(-0.45, 0.75, h));
-
-            float barNape = exp(-pow((zW - 1.24) / 0.15, 2.0)) * smoothstep(0.18, 0.52, h) * 0.85;
-            float bar1    = exp(-pow((zW - 0.68) / (barW * 1.00), 2.0)) * 1.00;
-            float bar2    = exp(-pow((zW - 0.06) / (barW * 1.04), 2.0)) * 1.00;
-            float bar3    = exp(-pow((zW + 0.58) / (barW * 0.96), 2.0)) * 0.96;
-            float bar4    = exp(-pow((zW + 1.18) / (barW * 0.80), 2.0)) * 0.72;
-            float bar5    = exp(-pow((zW + 1.68) / (barW * 0.68), 2.0)) * 0.52;
-            float gillSpot = exp(-pow((vObjPos.z - 1.04) / 0.065, 2.0)) * exp(-pow((vObjPos.y + 0.04) / 0.13, 2.0)) * 0.68;
-
-            // Sólidas até o topo do dorso, esmaecendo organicamente abaixo da linha média
-            float vertFade = smoothstep(-0.42, 0.10, h);
-            float rawBars = max(max(bar1, bar2), max(bar3, max(bar4, bar5))) * vertFade;
-            float barMask = clamp(max(rawBars, max(barNape, gillSpot)), 0.0, 1.0);
-            barMask = smoothstep(0.24, 0.70, barMask);
-
-            vec3 barDark = vec3(0.065, 0.082, 0.075) * (0.86 + 0.24 * macroVar);
-            albedo = mix(albedo, barDark, barMask * 0.82);
-
-            // Sombra sutil ao redor da cavidade orbital para integrar o olho na cabeça
-            float eyeHalo = exp(-pow((vObjPos.z - 1.56) / 0.13, 2.0)) * exp(-pow((vObjPos.y - 0.18) / 0.12, 2.0));
-            albedo *= (1.0 - eyeHalo * 0.34);
-
-            // Escurecimento sutil da linha lateral arqueada
-            float latLineY = 0.22 * sin(clamp((t - 0.22) / 0.55, 0.0, 1.0) * 3.14159) + 0.04;
-            float latLine = exp(-pow((vObjPos.y - latLineY) * 42.0, 2.0)) * smoothstep(0.24, 0.30, t) * smoothstep(0.96, 0.82, t);
-            albedo *= (1.0 - latLine * 0.20);
-
-            // Detalhes anatômicos da cabeça: opérculo, pré-opérculo, boca e narina
-            float opercCurve = 1.12 - 0.22 * pow(h + 0.04, 2.0);
-            float opercEdge = exp(-pow((vObjPos.z - opercCurve) * 28.0, 2.0)) * smoothstep(-0.72, -0.35, h) * smoothstep(0.62, 0.24, h);
-            float preOperc = exp(-pow((vObjPos.z - (opercCurve + 0.22)) * 34.0, 2.0)) * smoothstep(-0.62, -0.25, h) * smoothstep(0.18, -0.05, h);
-            albedo *= (1.0 - opercEdge * 0.48 - preOperc * 0.20);
-
-            // Fenda da boca de predador + cavidade bucal escura quando abre a boca para comer!
-            float mouthY = -0.15 + (vObjPos.z - 1.58) * 0.24;
-            float mouthCleft = exp(-pow((vObjPos.y - mouthY) * 34.0, 2.0)) * smoothstep(1.50, 1.68, vObjPos.z);
-            albedo *= (1.0 - mouthCleft * 0.58);
-            if (uMouthOpen > 0.02) {
-              float cavityHalf = mix(0.02, 0.085, uMouthOpen);
-              float inCavity = smoothstep(cavityHalf, cavityHalf * 0.25, abs(vObjPos.y - mouthY)) * smoothstep(1.56, 1.82, vObjPos.z);
-              albedo = mix(albedo, vec3(0.045, 0.022, 0.028), inCavity * smoothstep(0.02, 0.35, uMouthOpen) * 0.94);
+            if (vOralSurface > 0.5) {
+              vec3 mouth = mix(vec3(0.27, 0.112, 0.084), vec3(0.069, 0.029, 0.030), smoothstep(0.015, 0.146, t));
+              float gum = smoothstep(0.35, 0.49, abs(vUv.y - 0.5)) * (1.0 - smoothstep(0.06, 0.15, t));
+              float lipRim = 0.78 * (1.0 - smoothstep(0.006, 0.054, t));
+              color = mix(mouth, vec3(0.51, 0.29, 0.16), max(gum, lipRim));
+              color += vec3(0.24, 0.11, 0.08) * glint;
             }
 
-            // Narina discreta à frente do olho
-            float nostril = exp(-pow((vObjPos.z - 1.88) / 0.030, 2.0)) * exp(-pow((vObjPos.y - 0.16) / 0.026, 2.0));
-            albedo *= (1.0 - nostril * 0.50);
-
-            // Sombra sutil nas bordas das escamas
-            albedo *= mix(1.0, 0.90 + 0.14 * sc.x - 0.08 * sc.z, scaleAmt);
-
-            // Iluminação física natural + Iridescência azul-turquesa sem excesso de brilho plástico
-            float NdotV = max(dot(N, V), 0.0);
-            float fresnel = pow(1.0 - NdotV, 2.8);
-            float diff = max(dot(N, L), 0.0);
-            vec3 hemi = mix(vec3(0.09, 0.25, 0.27), vec3(0.74, 0.93, 0.88), N.y * 0.5 + 0.5);
-            vec3 lighting = hemi * 0.56 + vec3(1.0, 0.97, 0.88) * diff * 0.72;
-
-            vec3 H = normalize(L + V);
-            float specBroad = pow(max(dot(N, H), 0.0), 26.0) * 0.18;
-            float specSharp = pow(max(dot(N, H), 0.0), 92.0) * (0.28 + 0.32 * sc.x * scaleAmt);
-
-            vec3 blueIridescence = vec3(0.16, 0.62, 0.86);
-            float iridZone = 0.32 + 0.68 * smoothstep(0.30, 0.85, t);
-            vec3 color = albedo * lighting;
-            color += vec3(0.92, 0.96, 0.82) * (specBroad + specSharp);
-            color += mix(vec3(0.42, 0.82, 0.78), blueIridescence, iridZone) * fresnel * 0.30;
-
-            // Cáusticas subaquáticas dançando sobre o dorso e flancos
-            float c = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
-            float causticMask = smoothstep(-0.22, 0.72, Ngeom.y);
-            color += vec3(0.45, 0.90, 0.84) * c * 0.26 * uCausticsIntensity * causticMask;
-
-            // Absorção natural da água pela distância à câmera
-            float camDist = length(cameraPosition - vWorldPos);
-            float waterAbsorb = clamp((camDist - 14.0) * 0.017, 0.03, 0.26);
-            color = mix(color, vec3(0.06, 0.29, 0.32), waterAbsorb);
+            float waterAbsorb = clamp((length(cameraPosition - vWorldPos) - 13.0) * 0.012, 0.025, 0.24);
+            color = mix(color, vec3(0.07, 0.26, 0.29), waterAbsorb);
 
             gl_FragColor = vec4(color, 1.0);
           }
@@ -1518,34 +1586,31 @@
           varying vec3 vWorldNormal;
           void main() {
             vec3 nLoc = normalize(vLocalNorm);
-            vec3 gazeDir = normalize(vec3(uSideSign * 0.95, 0.06, 0.28));
-            float align = dot(nLoc, gazeDir);
-            float r = acos(clamp(align, -1.0, 1.0));
-            float ang = atan(nLoc.y, nLoc.z);
-            float fibers = 0.86 + 0.14 * sin(ang * 22.0);
+            vec3 gaze = normalize(vec3(uSideSign * 0.94, 0.04, 0.23));
+            vec3 tangent = normalize(cross(vec3(0.0, 1.0, 0.0), gaze));
+            vec3 up = cross(gaze, tangent);
+            float r = acos(clamp(dot(nLoc, gaze), -1.0, 1.0));
+            float ang = atan(dot(nLoc, up), dot(nLoc, tangent));
+            float fibers = 0.87 + 0.09 * sin(ang * 23.0 + sin(ang * 7.0)) + 0.045 * sin(ang * 37.0);
 
-            vec3 socketRim = vec3(0.18, 0.24, 0.12);
-            vec3 irisOuter = vec3(0.62, 0.22, 0.06) * fibers;
-            vec3 irisGold  = vec3(0.92, 0.68, 0.22) * fibers;
-            vec3 pupil     = vec3(0.015, 0.02, 0.025);
-
-            vec3 col = socketRim;
-            col = mix(col, irisOuter, smoothstep(0.92, 0.62, r));
-            col = mix(col, irisGold, smoothstep(0.54, 0.42, r));
-            col = mix(col, pupil, smoothstep(0.42, 0.34, r));
+            vec3 col = mix(vec3(0.27, 0.25, 0.11), vec3(0.45, 0.30, 0.13), 1.0 - smoothstep(0.64, 0.87, r));
+            col = mix(col, vec3(0.65, 0.208, 0.084) * fibers, 1.0 - smoothstep(0.65, 0.73, r));
+            col = mix(col, vec3(0.93, 0.43, 0.15) * fibers, 1.0 - smoothstep(0.39, 0.51, r));
+            col = mix(col, vec3(0.013, 0.018, 0.014), 1.0 - smoothstep(0.344, 0.409, r));
 
             vec3 N = normalize(vWorldNormal);
             vec3 V = normalize(cameraPosition - vWorldPos);
-            vec3 L = normalize(vec3(-0.28, 0.92, 0.44));
-            float diff = 0.50 + 0.50 * max(dot(N, L), 0.0);
-            float spec = pow(max(dot(N, normalize(L + V)), 0.0), 110.0) * 1.15;
-            gl_FragColor = vec4(col * diff + vec3(spec), 1.0);
+            vec3 L = normalize(vec3(-0.38, 0.82, 0.43));
+            float diff = 0.74 + 0.26 * max(dot(N, L), 0.0);
+            float reflex = max(dot(N, normalize(L + V)), 0.0);
+            float spec = pow(reflex, 92.0) * 0.94 + pow(reflex, 20.0) * 0.065;
+            gl_FragColor = vec4(col * diff + vec3(0.94, 0.97, 1.0) * spec, 1.0);
           }
         `
       });
     }
 
-    // Nadadeiras do Tucunaré Azul com relevo de raios, brilho azul-turquesa, pintas peroladas e ocelo
+    // Nadadeiras com raios pigmentados e membranas mais finas nas bordas.
     function createTucunareFinMaterial(fishUniforms, finType, sideSign = 0, pivot = new THREE.Vector3()) {
       return new THREE.ShaderMaterial({
         uniforms: {
@@ -1590,11 +1655,11 @@
               float flareScale = mix(0.56, 1.06, uDorsalFlare);
               float baseY = p.y - uv.y * 0.45;
               p.y = mix(p.y, baseY + uv.y * 0.45 * flareScale, uv.y);
-              float sBody = clamp((2.25 - p.z) / 5.95, 0.0, 1.0);
+              float sBody = fishLengthFraction(p.z);
               p.x += sin(uSwimPhase - sBody * 4.9 - uv.y * 0.7) * (uTailAmp * 0.14 + 0.015) * uv.y;
             } else if (uFinType == 2 || uFinType == 3) {
               // Dorsal mole e anal: ondulação suave na membrana
-              float sBody = clamp((2.25 - p.z) / 5.95, 0.0, 1.0);
+              float sBody = fishLengthFraction(p.z);
               float wave = sin(uSwimPhase - sBody * 4.9 - uv.y * 1.25 - uv.x * 1.1) * (uTailAmp * 0.26 + 0.035) * uv.y;
               p.x += wave;
             } else if (uFinType == 4) {
@@ -1607,12 +1672,14 @@
               float s = sin(angleY);
               vec3 q = vec3(p.x * c - p.z * s, p.y + featherZ, p.x * s + p.z * c);
               p = uPivot + q;
+              n = vec3(n.x * c - n.z * s, n.y, n.x * s + n.z * c);
             } else if (uFinType == 5) {
               float tuck = mix(0.42, 0.0, clamp(uPectoralSpread * 1.4, 0.0, 1.0));
               float c = cos(tuck);
               float s = sin(tuck);
               vec3 q = vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c);
               p = uPivot + q;
+              n = vec3(n.x, n.y * c - n.z * s, n.y * s + n.z * c);
             }
 
             vec3 dp = deformFishPosition(p);
@@ -1640,7 +1707,6 @@
             return fract(p.x * p.y);
           }
 
-          // Pintas orgânicas com deslocamento aleatório (sem grade artificial!)
           float organicSpots(vec2 uv, vec2 scale, float density, float seed) {
             vec2 p = uv * scale;
             vec2 cell = floor(p);
@@ -1648,111 +1714,85 @@
             float r1 = hash21(cell + seed);
             float r2 = hash21(cell + seed + 17.3);
             float r3 = hash21(cell + seed + 43.7);
-            vec2 jitter = (vec2(r1, r2) - 0.5) * 0.46;
-            float rad = 0.13 + 0.14 * r3;
-            float d = length(f - jitter);
-            return smoothstep(rad, rad * 0.30, d) * step(1.0 - density, r3);
+            vec2 jitter = (vec2(r1, r2) - 0.5) * 0.53;
+            float rad = 0.10 + 0.12 * r2;
+            float d = length((f - jitter) * vec2(1.05, 0.87));
+            return (1.0 - smoothstep(rad * 0.3, rad, d)) * step(1.0 - density, r3);
+          }
+
+          float edgeFade(float coord, float width) {
+            return smoothstep(0.0, width, coord) * (1.0 - smoothstep(1.0 - width, 1.0, coord));
+          }
+
+          float finRays(float coord, float count, float offset) {
+            float band = coord * count + offset;
+            float ray = 1.0 - smoothstep(0.07, 0.27, abs(fract(band) - 0.5));
+            return mix(ray, 0.28, smoothstep(0.35, 0.96, fwidth(band)));
           }
 
           void main() {
-            vec3 col = vec3(0.5);
-            float alpha = 0.7;
-            float rayRelief = 0.5;
+            float u = vUv.x;
+            float v = vUv.y;
+            bool radial = uFinType == 0 || uFinType >= 4;
+            float reach = radial ? u : v;
+            float across = radial ? v : u;
+            float rayCount = 18.0;
+            float opacity = 0.85;
+            vec3 col;
+            float spots = 0.0;
 
             if (uFinType == 0) {
-              // CAUDA DO TUCUNARÉ AZUL: fusão suave azul-oliva iridescente + lobo inferior âmbar-ferrugem + pintas orgânicas + OCELO redondo!
-              float rays = pow(0.5 + 0.5 * sin(vUv.y * 42.0 * 3.14159), 1.8);
-              rayRelief = rays;
-
-              vec3 peduncleBlend = vec3(0.32, 0.40, 0.22);
-              vec3 blueUpper = mix(vec3(0.14, 0.34, 0.44), vec3(0.18, 0.48, 0.70), smoothstep(0.18, 0.88, vUv.x));
-              vec3 amberLower = mix(vec3(0.58, 0.36, 0.14), vec3(0.76, 0.30, 0.11), smoothstep(0.12, 0.65, vUv.x));
-              amberLower = mix(amberLower, vec3(0.22, 0.44, 0.60), smoothstep(0.66, 0.96, vUv.x) * 0.58);
-
-              // Transição ampla e natural entre lobo inferior e superior
-              float lobeMix = smoothstep(0.24, 0.62, vUv.y);
-              col = mix(amberLower, blueUpper, lobeMix);
-              // Junção suave e longa com o pedúnculo (elimina o corte seco!)
-              col = mix(peduncleBlend, col, smoothstep(0.04, 0.30, vUv.x));
-              col *= (0.84 + 0.22 * rays);
-
-              // Pintas peroladas orgânicas (não alinhadas em grade)
-              float spots = organicSpots(vUv, vec2(11.0, 14.0), 0.44, 5.1) * smoothstep(0.24, 0.42, vUv.x) * smoothstep(0.96, 0.80, vUv.x);
-              col = mix(col, vec3(0.84, 0.95, 0.98), spots * 0.55);
-
-              // Borda traseira translúcida suave
-              col = mix(col, vec3(0.58, 0.82, 0.92), smoothstep(0.86, 0.99, vUv.x) * 0.35);
-
-              // OCELO perfeitamente redondo (compensando comprimento vs altura da cauda!)
-              vec2 ocDelta = (vUv - vec2(0.25, 0.63)) * vec2(1.75, 1.0);
-              float ocDist = length(ocDelta);
-              float goldRing = smoothstep(0.145, 0.118, ocDist) * smoothstep(0.074, 0.095, ocDist);
-              float blackCore = smoothstep(0.098, 0.075, ocDist);
-              col = mix(col, vec3(0.98, 0.88, 0.34), goldRing * 0.94);
-              col = mix(col, vec3(0.02, 0.025, 0.03), blackCore);
-
-              float edgeSoft = smoothstep(0.0, 0.05, vUv.y) * smoothstep(1.0, 0.95, vUv.y) * smoothstep(1.0, 0.86, vUv.x);
-              alpha = mix(0.96, 0.48, smoothstep(0.12, 1.0, vUv.x)) * edgeSoft;
-              alpha = max(alpha, max(goldRing, blackCore) * 0.98);
+              float transition = smoothstep(0.44, 0.63, v + 0.055 * sin(u * 5.0));
+              vec3 upper = mix(vec3(0.38, 0.46, 0.32), vec3(0.26, 0.51, 0.51), smoothstep(0.06, 0.78, u));
+              vec3 lower = mix(vec3(0.55, 0.47, 0.24), vec3(0.75, 0.34, 0.16), smoothstep(0.03, 0.74, u));
+              col = mix(lower, upper, transition);
+              spots = organicSpots(vUv, vec2(10.0, 13.0), 0.29, 5.1) * transition * smoothstep(0.14, 0.44, u);
+              rayCount = 24.0;
+              opacity = 0.97;
             } else if (uFinType == 1) {
-              // DORSAL ESPINHOSA: espinhos escuros distintos + membrana grafite-oliva translúcida
-              float spinePos = fract(vUv.x * 14.0);
-              float spineShaft = smoothstep(0.22, 0.05, abs(spinePos - 0.5));
-              rayRelief = spineShaft;
-              vec3 membrane = mix(vec3(0.14, 0.19, 0.12), vec3(0.05, 0.08, 0.10), vUv.y);
-              vec3 spineCol = vec3(0.03, 0.04, 0.045);
-              col = mix(membrane, spineCol, spineShaft * 0.85);
-              col += vec3(0.10, 0.18, 0.22) * smoothstep(0.75, 0.98, vUv.y) * 0.45;
-              float edgeSoft = smoothstep(0.0, 0.04, vUv.x) * smoothstep(1.0, 0.95, vUv.x) * smoothstep(1.0, 0.88, vUv.y);
-              alpha = mix(0.92, 0.62, vUv.y) * (0.72 + 0.28 * spineShaft) * edgeSoft;
+              col = mix(vec3(0.32, 0.42, 0.23), vec3(0.16, 0.31, 0.29), smoothstep(0.04, 0.86, v));
+              rayCount = 14.0;
+              opacity = 0.91;
             } else if (uFinType == 2) {
-              // DORSAL POSTERIOR MOLE: azul-turquesa iridescente com pintas orgânicas
-              float rays = pow(0.5 + 0.5 * sin(vUv.x * 26.0 * 3.14159), 1.6);
-              rayRelief = rays;
-              col = mix(vec3(0.20, 0.34, 0.28), vec3(0.18, 0.48, 0.72), smoothstep(0.12, 0.85, vUv.y)) * (0.86 + 0.20 * rays);
-              float spot = organicSpots(vUv, vec2(11.0, 7.0), 0.45, 2.3) * smoothstep(0.15, 0.35, vUv.y);
-              col = mix(col, vec3(0.84, 0.95, 0.98), spot * 0.58);
-              float edgeSoft = smoothstep(0.0, 0.06, vUv.x) * smoothstep(1.0, 0.93, vUv.x) * smoothstep(1.0, 0.84, vUv.y);
-              alpha = mix(0.84, 0.40, vUv.y) * edgeSoft;
+              col = mix(vec3(0.32, 0.45, 0.33), vec3(0.27, 0.55, 0.56), smoothstep(0.10, 0.89, v));
+              spots = organicSpots(vUv, vec2(12.0, 8.0), 0.33, 2.3) * smoothstep(0.31, 0.65, v);
+              rayCount = 20.0;
+              opacity = 0.91;
             } else if (uFinType == 3) {
-              // ANAL: base âmbar-alaranjada + borda azul iridescente com pintas orgânicas
-              float rays = pow(0.5 + 0.5 * sin(vUv.x * 24.0 * 3.14159), 1.6);
-              rayRelief = rays;
-              vec3 baseAmber = vec3(0.68, 0.38, 0.14);
-              vec3 tipBlue = vec3(0.20, 0.48, 0.72);
-              col = mix(baseAmber, tipBlue, smoothstep(0.32, 0.86, vUv.y)) * (0.86 + 0.18 * rays);
-              float spot = organicSpots(vUv, vec2(10.0, 6.0), 0.42, 9.1) * smoothstep(0.20, 0.40, vUv.y);
-              col = mix(col, vec3(0.86, 0.95, 0.98), spot * 0.50);
-              float edgeSoft = smoothstep(0.0, 0.07, vUv.x) * smoothstep(1.0, 0.92, vUv.x) * smoothstep(1.0, 0.84, vUv.y);
-              alpha = mix(0.84, 0.40, vUv.y) * edgeSoft;
+              col = mix(vec3(0.56, 0.38, 0.19), vec3(0.77, 0.32, 0.16), smoothstep(0.07, 0.73, v));
+              col = mix(col, vec3(0.32, 0.43, 0.42), smoothstep(0.83, 1.0, v) * 0.60);
+              rayCount = 17.0;
             } else if (uFinType == 4) {
-              // PEITORAIS: translúcidas sedosas esverdeado-douradas com raios delicados
-              float rays = pow(0.5 + 0.5 * sin(vUv.y * 24.0 * 3.14159), 1.6);
-              rayRelief = rays;
-              col = mix(vec3(0.50, 0.58, 0.34), vec3(0.74, 0.88, 0.86), smoothstep(0.08, 0.85, vUv.x)) * (0.86 + 0.18 * rays);
-              float edgeSoft = smoothstep(0.0, 0.08, vUv.y) * smoothstep(1.0, 0.92, vUv.y) * smoothstep(1.0, 0.80, vUv.x);
-              alpha = mix(0.56, 0.16, smoothstep(0.08, 1.0, vUv.x)) * (0.72 + 0.28 * rays) * edgeSoft;
+              col = mix(vec3(0.63, 0.52, 0.26), vec3(0.71, 0.66, 0.44), smoothstep(0.11, 0.97, u));
+              rayCount = 14.0;
+              opacity = 0.64;
             } else {
-              // PÉLVICAS: âmbar-dourado com borda frontal azul-perolada
-              float rays = pow(0.5 + 0.5 * sin(vUv.y * 18.0 * 3.14159), 1.6);
-              rayRelief = rays;
-              col = mix(vec3(0.74, 0.42, 0.14), vec3(0.28, 0.54, 0.74), smoothstep(0.45, 0.92, vUv.x)) * (0.88 + 0.16 * rays);
-              col = mix(col, vec3(0.86, 0.96, 1.0), smoothstep(0.20, 0.02, vUv.y) * 0.65);
-              float edgeSoft = smoothstep(0.0, 0.08, vUv.y) * smoothstep(1.0, 0.90, vUv.y) * smoothstep(1.0, 0.82, vUv.x);
-              alpha = mix(0.82, 0.38, vUv.x) * edgeSoft;
+              col = mix(vec3(0.58, 0.36, 0.19), vec3(0.82, 0.41, 0.21), smoothstep(0.07, 0.89, u));
+              col = mix(col, vec3(0.81, 0.71, 0.46), (1.0 - smoothstep(0.01, 0.13, v)) * 0.49);
+              rayCount = 9.0;
             }
 
-            // Iluminação + brilho sutil nos raios + translucidez subaquática
+            float rayBend = uFinType == 1 ? 0.0 : 0.28 * sin(across * 5.2) * reach;
+            float rays = finRays(across, rayCount, rayBend);
+            float fiberGrain = hash21(floor(vec2(across * rayCount, reach * 18.0)) + float(uFinType) * 19.0);
+            col *= 0.86 + 0.22 * rays + (fiberGrain - 0.5) * 0.09;
+            col = mix(col, vec3(0.71, 0.87, 0.79), spots * 0.66);
+
+            float edge = edgeFade(across, 0.046) * (1.0 - smoothstep(0.94, 1.0, reach));
+            float alpha = opacity * edge * mix(1.0, 0.77, reach) * (0.87 + 0.13 * rays);
+
             vec3 N = normalize(vWorldNormal);
             vec3 V = normalize(cameraPosition - vWorldPos);
-            vec3 L = normalize(vec3(-0.28, 0.92, 0.44));
-            float rimLight = pow(1.0 - abs(dot(N, V)), 2.2) * 0.28;
-            float spec = pow(max(abs(dot(N, normalize(L + V))), 0.0), 32.0) * (0.14 + 0.16 * rayRelief);
-            col *= (0.74 + 0.26 * abs(N.x) + 0.16 * max(N.y, 0.0));
-            col += vec3(0.55, 0.90, 0.95) * (spec + rimLight * 0.5);
-
-            float c = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
-            col += vec3(0.40, 0.86, 0.82) * c * 0.14 * uCausticsIntensity;
+            vec3 L = normalize(vec3(-0.38, 0.82, 0.43));
+            float transmit = 0.31 * abs(dot(N, L));
+            float rim = pow(1.0 - abs(dot(N, V)), 2.5);
+            float spec = pow(abs(dot(N, normalize(L + V))), 34.0) * (0.09 + 0.13 * rays);
+            col *= 0.72 + transmit;
+            col += vec3(0.64, 0.87, 0.83) * (spec + rim * 0.08);
+            float caustics = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
+            col += vec3(0.38, 0.80, 0.73) * caustics * 0.12 * uCausticsIntensity;
+            float waterAbsorb = clamp((length(cameraPosition - vWorldPos) - 13.0) * 0.012, 0.025, 0.24);
+            col = mix(col, vec3(0.07, 0.26, 0.29), waterAbsorb);
 
             gl_FragColor = vec4(col, alpha);
           }
@@ -1855,11 +1895,11 @@
       pelvRMesh.renderOrder = 5;
       group.add(pelvRMesh);
 
-      const eyeLMesh = new THREE.Mesh(sharedGeos.eyeL, createEyeMaterial(fishUniforms, 1, eyeLPos));
+      const eyeLMesh = new THREE.Mesh(sharedGeos.eye, createEyeMaterial(fishUniforms, 1, eyeLPos));
       eyeLMesh.renderOrder = 5;
       group.add(eyeLMesh);
 
-      const eyeRMesh = new THREE.Mesh(sharedGeos.eyeR, createEyeMaterial(fishUniforms, -1, eyeRPos));
+      const eyeRMesh = new THREE.Mesh(sharedGeos.eye, createEyeMaterial(fishUniforms, -1, eyeRPos));
       eyeRMesh.renderOrder = 5;
       group.add(eyeRMesh);
 
@@ -1921,6 +1961,1290 @@
     }
 
     const tucunare = createTucunare();
+
+    // =========================================================================
+    // 6B. TUCUNARÉ REALISTA V2 (MODELO BASEADO NA REFERÊNCIA VISUAL)
+    // =========================================================================
+    const glslF = n => Number(n).toFixed(4);
+    const HEAD_Z2 = 2.26;
+    const BODY_LEN2 = 4.10;
+    const PEDUNCLE_END_Z2 = HEAD_Z2 - BODY_LEN2;
+    const CAUDAL_ROOT_Z2 = PEDUNCLE_END_Z2 + 0.12;
+    const CAUDAL_LEN2 = 1.14;
+    const EYE_Z2 = 1.66;
+    const EYE_Y2 = 0.225;
+    const MOUTH_END2 = 0.172;
+    const MOUTH_TIP_Y2 = -0.055;
+    const MOUTH_SLOPE2 = 2.32;
+    const MOUTH_SETTLE2 = 0.30;
+    const JAW_HINGE_Z2 = HEAD_Z2 - MOUTH_END2 * BODY_LEN2;
+    const JAW_HINGE_Y2 = MOUTH_TIP_Y2 - MOUTH_SLOPE2 * MOUTH_END2;
+
+    function operculumZ2(y) {
+      return 1.06 + 0.42 * (y + 0.10) ** 2 + 0.20 * y;
+    }
+
+    // Perfil dorsal (+Y): focinho arredondado compacto, testa cheia sobre o olho e dorso musculoso
+    const DORSAL_TABLE2 = [
+      [0.00, 0.095],
+      [0.04, 0.195],
+      [0.09, 0.305],
+      [0.15, 0.430],
+      [0.22, 0.590],
+      [0.31, 0.755],
+      [0.42, 0.805],
+      [0.54, 0.765],
+      [0.65, 0.635],
+      [0.76, 0.445],
+      [0.85, 0.275],
+      [0.92, 0.210],
+      [1.00, 0.240]
+    ];
+
+    // Perfil ventral (-Y): queixo curto e largo, garganta cheia, subida firme atrás da anal
+    const VENTRAL_TABLE2 = [
+      [0.00, 0.165],
+      [0.04, 0.295],
+      [0.10, 0.455],
+      [0.17, 0.600],
+      [0.26, 0.715],
+      [0.36, 0.765],
+      [0.48, 0.765],
+      [0.59, 0.690],
+      [0.69, 0.530],
+      [0.79, 0.345],
+      [0.88, 0.225],
+      [0.94, 0.205],
+      [1.00, 0.230]
+    ];
+
+    // Largura lateral (X): focinho largo em ferradura (U), cabeça robusta e flanco comprimido
+    const WIDTH_TABLE2 = [
+      [0.00, 0.155],
+      [0.04, 0.220],
+      [0.10, 0.275],
+      [0.16, 0.315],
+      [0.26, 0.405],
+      [0.40, 0.420],
+      [0.56, 0.340],
+      [0.72, 0.220],
+      [0.86, 0.115],
+      [0.96, 0.062],
+      [1.00, 0.000]
+    ];
+
+    const peacockHeightUp = t => Math.max(0.015, sampleProfile(DORSAL_TABLE2, t));
+    const peacockHeightDown = t => Math.max(0.015, sampleProfile(VENTRAL_TABLE2, t));
+    const peacockWidth = t => Math.max(0.0, sampleProfile(WIDTH_TABLE2, t));
+
+    function createPeacockBodyGeometry() {
+      const lengthSegs = 168;
+      const halfRingSegs = 40;
+      const positions = [];
+      const uvs = [];
+      const anatomy = [];
+      const reliefs = [];
+      const indices = [];
+      const mouthRings = [];
+      const stride = halfRingSegs + 1;
+      const halfSize = (lengthSegs + 1) * stride;
+
+      for (const jaw of [1, -1]) {
+        const offset = jaw > 0 ? 0 : halfSize;
+        for (let i = 0; i <= lengthSegs; i++) {
+          const t = i / lengthSegs;
+          const baseZ = HEAD_Z2 - t * BODY_LEN2;
+          const mouth = 1 - THREE.MathUtils.smoothstep(t, 0.095, MOUTH_END2);
+          const noseRound = Math.sqrt(1 - (1 - Math.min(1, t / 0.024)) ** 2);
+          const lipAxis = (MOUTH_TIP_Y2 - MOUTH_SLOPE2 * Math.min(t, MOUTH_END2)) *
+            (1 - THREE.MathUtils.smoothstep(t, MOUTH_END2, MOUTH_SETTLE2));
+          const lipY = lipAxis + jaw * 0.005 * mouth;
+          const rx = peacockWidth(t) * THREE.MathUtils.lerp(0.76, 1.0, noseRound);
+          const endY = jaw > 0 ? peacockHeightUp(t) : -peacockHeightDown(t);
+          // Mandíbula inferior curta e robusta (sem bico fino alongado)
+          const lipZ = jaw < 0 ? 0.042 * (1 - THREE.MathUtils.smoothstep(t, 0.015, 0.110)) : 0.0;
+          const noseBow = 0.055 * (1 - THREE.MathUtils.smoothstep(t, 0, 0.055));
+          const faceSlope = 0.026 * (1 - THREE.MathUtils.smoothstep(t, 0, 0.080));
+
+          for (let j = 0; j <= halfRingSegs; j++) {
+            const v = (j / halfRingSegs + (jaw < 0 ? 1 : 0)) * 0.5;
+            const theta = v * Math.PI * 2;
+            const cosT = Math.cos(theta);
+            const sinAbs = Math.abs(Math.sin(theta));
+            // Cabeça e dorso mais cheios em 3/4 com transição suave para o flanco
+            const crossExp = jaw > 0 ? THREE.MathUtils.lerp(0.80, 0.90, sinAbs) : 0.83;
+            const flankRadius = Math.pow(Math.abs(cosT), crossExp);
+
+            // Boca com fenda profundamente recuada, lábios carnudos salientes e sulco maxilar
+            const mouthCleft = Math.exp(-((sinAbs / 0.055) ** 2)) * mouth * noseRound;
+            const lipPad = Math.exp(-(((sinAbs - 0.115) / 0.075) ** 2)) * mouth * noseRound;
+            const maxGroove = (jaw > 0 ? 1.0 : 0.45) *
+              Math.exp(-(((sinAbs - 0.245) / 0.065) ** 2)) *
+              (1 - THREE.MathUtils.smoothstep(t, 0.11, 0.21)) * noseRound;
+
+            const z = baseZ + lipZ + noseBow * (1 - flankRadius ** 2) -
+              faceSlope * sinAbs * noseRound + 0.024 * lipPad - 0.032 * mouthCleft;
+            const y = lipY + sinAbs * (endY - lipY) * noseRound + jaw * 0.026 * lipPad;
+
+            // Cratera orbital funda com anel ósseo/pálpebra elevado ao redor
+            const ez = (z - EYE_Z2) / 0.128;
+            const ey = (y - EYE_Y2) / 0.118;
+            const er = Math.hypot(ez, ey);
+            const eyeCavity = Math.exp(-Math.pow(er / 0.86, 4.0));
+            const eyeRing = Math.exp(-(((er - 1.18) / 0.34) ** 2)) *
+              (0.75 + 0.55 * THREE.MathUtils.clamp((ey + 0.5) / 1.5, 0, 1));
+            const nostrilPit = Math.exp(-(((z - (EYE_Z2 + 0.24)) / 0.032) ** 2 + ((y - (EYE_Y2 - 0.04)) / 0.024) ** 2));
+
+            // Guelras profundas: bochecha, crista/sulco do pré-opérculo, aba do opérculo, fenda branquial e bolso peitoral
+            const opZ = operculumZ2(y);
+            const dOp = z - opZ;
+            const gillSpan = THREE.MathUtils.smoothstep(y, -0.56, -0.34) * (1 - THREE.MathUtils.smoothstep(y, 0.18, 0.36));
+            const preopSpan = THREE.MathUtils.smoothstep(y, -0.46, -0.26) * (1 - THREE.MathUtils.smoothstep(y, 0.06, 0.22));
+            const cheekPlate = Math.exp(-(((dOp - 0.20) / 0.28) ** 2 + ((y + 0.08) / 0.38) ** 2));
+            const opFlange = Math.exp(-(((dOp - 0.065) / 0.060) ** 2)) * gillSpan;
+            const gillSlit = Math.exp(-(((dOp + 0.025) / 0.038) ** 2)) * gillSpan;
+            const preopRidge = Math.exp(-(((dOp - 0.34) / 0.048) ** 2)) * preopSpan;
+            const preopGroove = Math.exp(-(((dOp - 0.28) / 0.034) ** 2)) * preopSpan;
+            const pectPocket = Math.exp(-(((z - 0.94) / 0.09) ** 2 + ((y + 0.19) / 0.14) ** 2));
+
+            const keelPinch = jaw > 0 ? 1.0 - 0.10 * Math.pow(sinAbs, 3.0) * THREE.MathUtils.smoothstep(t, 0.22, 0.72) : 1.0;
+
+            const x = Math.sign(cosT) * flankRadius *
+              (rx * keelPinch * (1 + 0.06 * jaw * sinAbs) +
+               0.038 * lipPad - 0.028 * mouthCleft - 0.018 * maxGroove +
+               0.055 * cheekPlate + 0.032 * opFlange - 0.072 * gillSlit +
+               0.020 * preopRidge - 0.022 * preopGroove - 0.022 * pectPocket -
+               0.088 * eyeCavity + 0.034 * eyeRing - 0.014 * nostrilPit);
+
+            positions.push(x, y, z);
+            uvs.push(t, v);
+            anatomy.push(jaw, 0);
+            reliefs.push(
+              mouthCleft,
+              gillSlit,
+              eyeCavity,
+              Math.min(1.0, preopGroove + maxGroove * 0.85 + pectPocket * 0.7)
+            );
+
+            if (i < lengthSegs && j < halfRingSegs) {
+              const a = offset + i * stride + j;
+              indices.push(a, a + stride, a + 1, a + stride, a + stride + 1, a + 1);
+            }
+          }
+
+          if (mouth > 0) {
+            const first = (offset + i * stride) * 3;
+            const last = first + halfRingSegs * 3;
+            mouthRings.push({ jaw, t, z: baseZ + lipZ, y: lipY, noseBow, left: positions[first], right: positions[last] });
+          }
+        }
+      }
+
+      // Cavidade bucal interna (céu da boca e assoalho) acompanhando a mandíbula inferior/superior
+      const palateSegs = 14;
+      for (let i = 0; i < mouthRings.length; i++) {
+        const { jaw, t, z, y, noseBow, left, right } = mouthRings[i];
+        const row = positions.length / 3;
+        for (let j = 0; j <= palateSegs; j++) {
+          const v = j / palateSegs;
+          const span = 2 * v - 1;
+          const arch = Math.sin(v * Math.PI) * THREE.MathUtils.smoothstep(t, 0.012, 0.068);
+          positions.push(THREE.MathUtils.lerp(left, right, v), y + jaw * 0.108 * arch, z + noseBow * (1 - span * span));
+          uvs.push(t, v);
+          anatomy.push(jaw, 1);
+          reliefs.push(0, 0, 0, 0);
+          if (j < palateSegs && mouthRings[i + 1]?.jaw === jaw) {
+            const a = row + j;
+            const b = a + palateSegs + 1;
+            indices.push(a, a + 1, b, b, a + 1, b + 1);
+          }
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setAttribute('anatomy', new THREE.Float32BufferAttribute(anatomy, 2));
+      geo.setAttribute('aRelief', new THREE.Float32BufferAttribute(reliefs, 4));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+
+      // Solda as normais no flanco atrás dos cantos da boca
+      const normals = geo.getAttribute('normal');
+      const normal = new THREE.Vector3();
+      const other = new THREE.Vector3();
+      for (let i = 0; i <= lengthSegs; i++) {
+        const join = THREE.MathUtils.smoothstep(i / lengthSegs, 0.115, MOUTH_END2);
+        for (const j of [0, halfRingSegs]) {
+          const a = i * stride + j;
+          const b = halfSize + i * stride + halfRingSegs - j;
+          normal.fromBufferAttribute(normals, a);
+          other.fromBufferAttribute(normals, b);
+          normal.lerp(other, join * 0.5).normalize();
+          other.lerp(normal, join).normalize();
+          normals.setXYZ(a, normal.x, normal.y, normal.z);
+          normals.setXYZ(b, other.x, other.y, other.z);
+        }
+      }
+      return geo;
+    }
+
+    // Cauda larga em cunha truncada com leve micro-corrugação dos raios
+    function createPeacockCaudalGeometry() {
+      const segU = 34;
+      const segV = 32;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const side = (v - 0.5) * 2.0;
+          const absSide = Math.abs(side);
+
+          const spreadY = 0.205 + Math.pow(u, 0.85) * (0.655 + side * 0.022);
+          const cornerTrim = 0.095 * Math.pow(absSide, 4.2) * u;
+          const centerDip = 0.045 * (1.0 - absSide * absSide) * Math.pow(u, 1.4);
+          const edgeSerrate = Math.sin(v * 22.0 * Math.PI) * 0.012 * Math.pow(u, 3.0);
+
+          const z = CAUDAL_ROOT_Z2 - u * CAUDAL_LEN2 + cornerTrim + centerDip + edgeSerrate;
+          const y = side * spreadY + 0.01;
+          const rayRipple = Math.sin(v * 24.0 * Math.PI) * 0.010 * u;
+          const x = Math.sin(v * Math.PI * 2.0) * 0.010 * u + rayRipple;
+
+          positions.push(x, y, z);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Dorsal Anterior Espinhosa: 10 espinhos em serra inclinados para trás com entalhe antes da dorsal mole
+    function createPeacockSpinyDorsalGeometry() {
+      const segU = 132;
+      const segV = 12;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      const startZ = 0.96;
+      const endZ = -0.34;
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const z = THREE.MathUtils.lerp(startZ, endZ, u);
+        const tBody = (HEAD_Z2 - z) / BODY_LEN2;
+        const baseY = peacockHeightUp(tBody) * 0.93;
+
+        const frontRise = THREE.MathUtils.smoothstep(u, 0.0, 0.14);
+        const rearSlope = 1.0 - 0.76 * Math.pow(THREE.MathUtils.smoothstep(u, 0.20, 1.0), 0.88);
+        const envelope = (0.04 + 0.64 * frontRise) * rearSlope;
+
+        const spinePhase = (u * 10.0) % 1.0;
+        const saw = spinePhase < 0.24
+          ? THREE.MathUtils.smoothstep(spinePhase, 0.0, 0.24)
+          : Math.pow(1.0 - (spinePhase - 0.24) / 0.76, 1.50);
+        const scallop = 0.73 + 0.27 * saw;
+        const finHeight = envelope * scallop;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const xRipple = Math.sin(u * 10.0 * Math.PI * 2.0) * 0.009 * v;
+          positions.push(xRipple, baseY + v * finHeight, z - v * finHeight * 0.48);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Dorsal Posterior Mole: leque amplo inclinado para trás sobre o pedúnculo
+    function createPeacockSoftDorsalGeometry() {
+      const segU = 40;
+      const segV = 14;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      const startZ = -0.28;
+      const endZ = -1.24;
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const z = THREE.MathUtils.lerp(startZ, endZ, u);
+        const tBody = (HEAD_Z2 - z) / BODY_LEN2;
+        const baseY = peacockHeightUp(tBody) * 0.90;
+        const finHeight = Math.pow(Math.sin(Math.pow(u, 0.78) * Math.PI), 0.54) * 0.59 + 0.035;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const sweep = v * finHeight * (0.72 + 0.88 * Math.pow(u, 0.92));
+          const xRipple = Math.sin(u * 14.0 * Math.PI) * 0.007 * v;
+          positions.push(xRipple, baseY + v * finHeight, z - sweep);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, b, d);
+          indices.push(b, c, d);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Nadadeira Anal: leque trapezoidal-arredondado bem pronunciado
+    function createPeacockAnalGeometry() {
+      const segU = 28;
+      const segV = 12;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      const startZ = -0.36;
+      const endZ = -1.22;
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const z = THREE.MathUtils.lerp(startZ, endZ, u);
+        const tBody = (HEAD_Z2 - z) / BODY_LEN2;
+        const baseY = -peacockHeightDown(tBody) * 0.90;
+        const finDepth = Math.pow(Math.sin(Math.pow(u, 0.72) * Math.PI), 0.58) * 0.56 + 0.03;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const xRipple = Math.sin(u * 12.0 * Math.PI) * 0.007 * v;
+          positions.push(xRipple, baseY - v * finDepth, z - v * finDepth * (0.72 + 0.80 * u));
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          indices.push(a, d, b);
+          indices.push(b, d, c);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Peitorais: leque arredondado-alongado e ligeiramente em concha com relevo nos raios
+    function createPeacockPectoralGeometry(sideSign) {
+      const segU = 22;
+      const segV = 16;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const heightSpan = 0.105 + 0.46 * Math.sin(Math.pow(u, 0.86) * Math.PI);
+        const reachX = Math.pow(u, 0.88) * 0.48;
+        const sweepBack = Math.pow(u, 1.00) * 0.88;
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const cup = Math.sin(v * Math.PI) * 0.062 * u;
+          const rayRipple = Math.sin(v * 14.0 * Math.PI) * 0.007 * u;
+          const localX = sideSign * (reachX + cup + rayRipple);
+          const localY = (0.56 - v) * heightSpan + u * 0.04;
+          const localZ = -sweepBack + Math.pow(v, 2.2) * 0.22 * u;
+          positions.push(localX, localY, localZ);
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          if (sideSign > 0) {
+            indices.push(a, d, b);
+            indices.push(b, d, c);
+          } else {
+            indices.push(a, b, d);
+            indices.push(b, c, d);
+          }
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // Pélvicas longas e pontiagudas com relevo nos raios e borda frontal arqueada
+    function createPeacockPelvicGeometry(sideSign) {
+      const segU = 16;
+      const segV = 12;
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      for (let i = 0; i <= segU; i++) {
+        const u = i / segU;
+        const reach = Math.pow(u, 0.90);
+
+        for (let j = 0; j <= segV; j++) {
+          const v = j / segV;
+          const depth = 0.78 + 0.14 * Math.sin(v * Math.PI) - 0.56 * v * v;
+          const sweep = 0.20 + 0.56 * v;
+          const rayRipple = Math.sin(v * 10.0 * Math.PI) * 0.010 * reach;
+          const frontArc = Math.sin(u * Math.PI) * 0.032 * (1 - v);
+          positions.push(
+            sideSign * (reach * (0.14 + 0.11 * (1 - v)) + (0.5 - v) * 0.028 + rayRipple),
+            -reach * depth + (0.5 - v) * 0.042,
+            -reach * sweep - v * 0.075 + frontArc
+          );
+          uvs.push(u, v);
+        }
+      }
+
+      const stride = segV + 1;
+      for (let i = 0; i < segU; i++) {
+        for (let j = 0; j < segV; j++) {
+          const a = i * stride + j;
+          const b = (i + 1) * stride + j;
+          const c = (i + 1) * stride + (j + 1);
+          const d = i * stride + (j + 1);
+          if (sideSign > 0) {
+            indices.push(a, d, b);
+            indices.push(b, d, c);
+          } else {
+            indices.push(a, b, d);
+            indices.push(b, c, d);
+          }
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    const peacockGeos = {
+      body: createPeacockBodyGeometry(),
+      caudal: createPeacockCaudalGeometry(),
+      spinyDorsal: createPeacockSpinyDorsalGeometry(),
+      softDorsal: createPeacockSoftDorsalGeometry(),
+      anal: createPeacockAnalGeometry(),
+      pectL: createPeacockPectoralGeometry(1),
+      pectR: createPeacockPectoralGeometry(-1),
+      pelvL: createPeacockPelvicGeometry(1),
+      pelvR: createPeacockPelvicGeometry(-1),
+      eye: new THREE.SphereGeometry(0.102, 28, 18).scale(0.54, 1.0, 1.0)
+    };
+
+    const pectLPivot2 = new THREE.Vector3(0.355, -0.19, 0.96);
+    const pectRPivot2 = new THREE.Vector3(-0.355, -0.19, 0.96);
+    const pelvLPivot2 = new THREE.Vector3(0.105, -0.69, 0.84);
+    const pelvRPivot2 = new THREE.Vector3(-0.105, -0.69, 0.84);
+    const eyeLPos2 = new THREE.Vector3(0.188, EYE_Y2, EYE_Z2);
+    const eyeRPos2 = new THREE.Vector3(-0.188, EYE_Y2, EYE_Z2);
+
+    const FISH_DEFORM_V2_GLSL = /* glsl */ `
+      uniform float uSwimPhase;
+      uniform float uTailAmp;
+      uniform float uSpineCurve;
+      uniform float uBreathPhase;
+      uniform float uIdleDriftPhase;
+      uniform float uMouthOpen;
+
+      float fishLengthFraction2(float z) {
+        return clamp((${glslF(HEAD_Z2)} - z) / ${glslF(HEAD_Z2 - CAUDAL_ROOT_Z2 + CAUDAL_LEN2 + 0.035)}, 0.0, 1.0);
+      }
+
+      float spineOffsetX2(float z) {
+        float s = fishLengthFraction2(z);
+        float wave = sin(uSwimPhase - s * 4.9);
+        float amp = uTailAmp * (0.006 + 0.994 * pow(max(0.0, s - 0.10) / 0.90, 2.05));
+        float swimX = wave * amp;
+        float idleDrift = sin(uIdleDriftPhase - s * 3.2) * 0.035 * pow(s, 2.6);
+        float ds = s - 0.25;
+        float bendX = uSpineCurve * (ds * ds) * 2.45;
+        return swimX + idleDrift + bendX;
+      }
+
+      vec3 deformFishPosition2(vec3 p) {
+        float gillDist = (p.z - 1.1800) * 4.0;
+        float gillMask = exp(-gillDist * gillDist);
+        p.x *= (1.0 + gillMask * (0.042 * sin(uBreathPhase) + 0.11 * uMouthOpen));
+        p.x += spineOffsetX2(p.z);
+        return p;
+      }
+
+      vec3 deformFishNormal2(vec3 p, vec3 n) {
+        float eps = 0.06;
+        float dx = spineOffsetX2(p.z + eps) - spineOffsetX2(p.z - eps);
+        float angle = atan(dx / (2.0 * eps));
+        float c = cos(angle);
+        float s = sin(angle);
+        return normalize(vec3(n.x * c + n.z * s, n.y, -n.x * s + n.z * c));
+      }
+    `;
+
+    function createPeacockBodyMaterial(fishUniforms) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...globalFishUniforms,
+          ...fishUniforms
+        },
+        vertexShader: /* glsl */ `
+          attribute vec2 anatomy;
+          attribute vec4 aRelief;
+          varying vec2 vUv;
+          varying float vOralSurface;
+          varying vec4 vRelief;
+          varying vec3 vObjPos;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${FISH_DEFORM_V2_GLSL}
+
+          void main() {
+            vUv = uv;
+            vOralSurface = anatomy.y;
+            vRelief = aRelief;
+            vObjPos = position;
+            vec3 p = position;
+            vec3 n = normal;
+            float upper = step(0.0, anatomy.x);
+            float jawWeight = 1.0 - smoothstep(0.065, ${glslF(MOUTH_END2)}, uv.x);
+            float jawMotion = uMouthOpen * jawWeight;
+            float breath = (1.0 - upper) * jawWeight * (0.005 + 0.005 * sin(uBreathPhase));
+            float angle = mix(-0.62, 0.13, upper) * jawMotion - breath;
+            mat2 jawRotation = mat2(cos(angle), sin(angle), -sin(angle), cos(angle));
+            vec2 hinge = vec2(${glslF(JAW_HINGE_Z2)}, ${glslF(JAW_HINGE_Y2)});
+            p.zy = hinge + jawRotation * (p.zy - hinge);
+            p.z += jawMotion * mix(-0.15, 0.066, upper);
+            n.zy = jawRotation * n.zy;
+            vec3 deformedPos = deformFishPosition2(p);
+            vec3 deformedNorm = deformFishNormal2(p, n);
+
+            vec4 wp = modelMatrix * vec4(deformedPos, 1.0);
+            vWorldPos = wp.xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * deformedNorm);
+
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uTime;
+          uniform float uCausticsIntensity;
+          varying vec2 vUv;
+          varying float vOralSurface;
+          varying vec4 vRelief;
+          varying vec3 vObjPos;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${CAUSTICS_GLSL}
+
+          float hash21(vec2 p) {
+            p = fract(p * vec2(123.34, 456.21));
+            p += dot(p, p + 45.32);
+            return fract(p.x * p.y);
+          }
+
+          float noise2D(vec2 p) {
+            vec2 i = floor(p);
+            vec2 f = fract(p);
+            f = f * f * (3.0 - 2.0 * f);
+            float a = hash21(i);
+            float b = hash21(i + vec2(1.0, 0.0));
+            float c = hash21(i + vec2(0.0, 1.0));
+            float d = hash21(i + vec2(1.0, 1.0));
+            return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+          }
+
+          float bell(float x) {
+            return exp(-x * x);
+          }
+
+          float oval(vec2 xy, vec2 center, vec2 radius) {
+            vec2 p = (xy - center) / radius;
+            return exp(-dot(p, p));
+          }
+
+          // Escamas cicloides maiores e com relevo nítido na borda posterior
+          vec4 peacockScalePattern(vec2 grid) {
+            float row = floor(grid.y);
+            vec2 coord = vec2(grid.x + mod(row, 2.0) * 0.5, grid.y);
+            vec2 cell = floor(coord);
+            vec2 p = fract(coord);
+            float arch = 0.68 - 0.90 * (p.y - 0.5) * (p.y - 0.5);
+            float distEdge = fract(p.x - arch + 0.5) - 0.5;
+            float ridge = bell(distEdge / 0.12);
+            float edgeInk = bell((distEdge + 0.028) / 0.105);
+            float plate = smoothstep(0.0, 0.55, -distEdge) * (0.74 + 0.26 * sin(p.y * 3.14159));
+            return vec4(plate, ridge, hash21(cell), edgeInk);
+          }
+
+          // Barra vertical com topo arredondado e contorno orgânico irregular pelas escamas
+          float darkBar2(float z, float y, float center, float width, float lowerEnd, float upperEnd, float leanSlope, float warp, float scaleEdge) {
+            float topFade = 1.0 - smoothstep(upperEnd - 0.12, upperEnd + 0.05, y + warp * 0.35);
+            float botFade = smoothstep(lowerEnd - 0.08, lowerEnd + 0.14, y + warp * 0.45);
+            float pinch = 1.0 - 0.16 * bell((y - 0.05) / 0.22);
+            float lean = (y - 0.10) * leanSlope;
+            float dist = abs(z - center + lean + warp * 0.65) / (width * pinch);
+            float edgeBreak = 0.15 * (scaleEdge - 0.35);
+            return (1.0 - smoothstep(0.68 + edgeBreak, 1.08 + edgeBreak, dist)) * topFade * botFade;
+          }
+
+          // Pintinha escura com anel dourado ao redor (como na linha lateral da referência)
+          void applyMiniOcellus(vec2 flank, vec2 center, float rad, float grain, inout vec3 albedo) {
+            float d = length((flank - center) / vec2(rad * 1.15, rad)) + (grain - 0.5) * 0.14;
+            float halo = 1.0 - smoothstep(0.85, 1.35, d);
+            float spot = 1.0 - smoothstep(0.45, 0.72, d);
+            albedo = mix(albedo, vec3(0.92, 0.78, 0.25), halo * 0.85);
+            albedo = mix(albedo, vec3(0.03, 0.04, 0.03), spot * 0.96);
+          }
+
+          void main() {
+            vec3 Ngeom = normalize(vWorldNormal);
+            vec3 V = normalize(cameraPosition - vWorldPos);
+            vec3 L = normalize(vec3(-0.38, 0.82, 0.43));
+            vec3 H = normalize(L + V);
+            float t = vUv.x;
+            float y = vObjPos.y;
+            float z = vObjPos.z;
+            vec2 flank = vObjPos.zy;
+            float head = 1.0 - smoothstep(0.18, 0.30, t);
+
+            float cloud = noise2D(flank * vec2(2.6, 3.8));
+            float mottle = noise2D(flank * vec2(7.8, 9.2));
+            float grain = noise2D(flank * vec2(26.0, 28.0));
+            float fineNoise = noise2D(flank * vec2(44.0, 44.0));
+            float flankLight = (mottle - 0.5) * 0.45 + (cloud - 0.5) * 0.55;
+
+            // Grade de escamas maiores (48 x 34) para volume e brilho legíveis
+            vec2 grid = vec2(t * (48.0 + 8.0 * t), vUv.y * 34.0);
+            vec4 scales = peacockScalePattern(grid);
+            float scaleFade = (1.0 - smoothstep(0.35, 0.86, max(fwidth(grid.x), fwidth(grid.y)))) *
+              mix(1.0, 0.06, head);
+
+            // Paleta fiel à referência: dorso verde-musgo, flanco dourado e ventre laranja-tangerina vivo
+            vec3 deepMoss = vec3(0.14, 0.28, 0.15);
+            vec3 oliveBack = vec3(0.27, 0.46, 0.21);
+            vec3 chartreuseShoulder = vec3(0.55, 0.64, 0.21);
+            vec3 flankGold = vec3(0.84, 0.70, 0.17);
+            vec3 warmAmber = vec3(0.90, 0.52, 0.13);
+            vec3 bellyOrange = vec3(0.91, 0.29, 0.07);
+
+            float colorY = y + flankLight * 0.11;
+            vec3 albedo = mix(flankGold, chartreuseShoulder, smoothstep(0.08, 0.36, colorY));
+            albedo = mix(albedo, oliveBack, smoothstep(0.30, 0.56, colorY));
+            albedo = mix(albedo, deepMoss, smoothstep(0.52, 0.78, colorY));
+            albedo = mix(albedo, warmAmber, 1.0 - smoothstep(-0.36, -0.06, colorY));
+            albedo = mix(albedo, bellyOrange, 1.0 - smoothstep(-0.56, -0.26, colorY));
+
+            // Bochecha amarelo-ouro brilhante e queixo/garganta laranja vivo
+            float cheekZone = oval(flank, vec2(1.36, -0.09), vec2(0.54, 0.34));
+            albedo = mix(albedo, vec3(0.93, 0.75, 0.19), cheekZone * 0.88);
+            float throatZone = oval(flank, vec2(1.18, -0.44), vec2(0.92, 0.24));
+            albedo = mix(albedo, vec3(0.93, 0.35, 0.08), throatZone * 0.82);
+
+            // Testa/focinho superior verde-oliva descendo sobre o olho + anel orbital verde-esmeralda
+            float snoutGreen = oval(flank, vec2(1.84, 0.17), vec2(0.42, 0.22)) * smoothstep(-0.02, 0.20, y);
+            albedo = mix(albedo, vec3(0.30, 0.48, 0.24), snoutGreen * 0.85);
+            float eyeRimVis = smoothstep(0.42, 0.85,
+              oval(flank, vec2(${glslF(EYE_Z2)}, ${glslF(EYE_Y2 + 0.015)}), vec2(0.155, 0.142))) * (1.0 - vRelief.z);
+            albedo = mix(albedo, vec3(0.22, 0.48, 0.22),
+              eyeRimVis * smoothstep(-0.08, 0.14, y - ${glslF(EYE_Y2)}) * 0.65);
+
+            // Pedúnculo caudal: transição verde em cima / laranja-âmbar embaixo
+            float peduncle = smoothstep(0.78, 1.0, t);
+            vec3 pedCol = mix(vec3(0.84, 0.42, 0.12), vec3(0.28, 0.47, 0.25), smoothstep(-0.08, 0.06, y));
+            albedo = mix(albedo, pedCol, peduncle * 0.82);
+
+            albedo *= 1.0 + flankLight * 0.26;
+
+            // Contorno escuro em cada escama (malha visível no dorso verde e flanco dourado)
+            float netStrength = smoothstep(-0.22, 0.24, y) * (1.0 - head * 0.92) * scaleFade;
+            albedo *= 1.0 - scales.w * 0.30 * netStrength;
+            albedo *= 1.0 + scaleFade * ((scales.z - 0.5) * 0.14 + scales.x * 0.09 - scales.y * 0.055);
+
+            // As 3 barras pretas verticais características da imagem de referência
+            float warp = (mottle - 0.5) * 0.16 + (grain - 0.5) * 0.07;
+            float b1 = darkBar2(z, y, 0.28, 0.168, -0.52, 0.56, 0.08, warp, scales.w);
+            float b2 = darkBar2(z, y, -0.34, 0.180, -0.55, 0.58, -0.10, warp, scales.w);
+            float b3 = darkBar2(z, y, -0.96, 0.140, -0.43, 0.36, 0.12, warp * 1.15, scales.w) * 0.92;
+            float bars = max(b1, max(b2, b3));
+
+            // Manchas pretas irregulares atrás do olho e respingos na bochecha
+            float cheekBlotchA = oval(vec2(z + warp * 0.45, y + (grain - 0.5) * 0.06), vec2(1.32, 0.04), vec2(0.20, 0.095));
+            float cheekBlotchB = oval(vec2(z + warp * 0.35, y + (mottle - 0.5) * 0.05), vec2(1.12, 0.00), vec2(0.11, 0.065));
+            float cheekBlotches = smoothstep(0.32, 0.55, max(cheekBlotchA, cheekBlotchB) + (mottle - 0.5) * 0.30);
+
+            float spatterArea = oval(flank, vec2(1.26, -0.06), vec2(0.36, 0.20));
+            float spatter = smoothstep(0.64, 0.72, grain * 0.72 + fineNoise * 0.38) * smoothstep(0.18, 0.55, spatterArea);
+            float shoulderSpots = smoothstep(0.66, 0.74, mottle * 0.65 + grain * 0.42) *
+              oval(flank, vec2(0.84, 0.00), vec2(0.18, 0.18));
+
+            float marks = max(bars, max(cheekBlotches, max(spatter, shoulderSpots)));
+            vec3 inkBlack = mix(vec3(0.032, 0.038, 0.028), vec3(0.075, 0.082, 0.050), grain);
+            albedo = mix(albedo, inkBlack, min(1.0, marks) * 0.95);
+
+            // Pintinhas com halo dourado próximas à linha lateral entre as barras (como na referência)
+            applyMiniOcellus(flank, vec2(0.00, 0.16), 0.045, grain, albedo);
+            applyMiniOcellus(flank, vec2(-0.64, 0.21), 0.040, grain, albedo);
+            applyMiniOcellus(flank, vec2(-0.78, 0.16), 0.038, grain, albedo);
+            applyMiniOcellus(flank, vec2(0.18, 0.57), 0.036, grain, albedo);
+
+            // Linha lateral, guelras com aba carnosa + fenda branquial profunda, narina e órbita
+            float latLineY = 0.08 + 0.17 * sin(clamp((t - 0.22) / 0.56, 0.0, 1.0) * 3.14159);
+            float lateral = bell((y - latLineY) / 0.008) * smoothstep(0.26, 0.35, t) * (1.0 - smoothstep(0.68, 0.76, t));
+            albedo *= 1.0 - lateral * (0.14 + 0.18 * grain);
+
+            float gillZ = 1.06 + 0.42 * (y + 0.10) * (y + 0.10) + 0.20 * y;
+            float gillLength = smoothstep(-0.56, -0.34, y) * (1.0 - smoothstep(0.18, 0.36, y));
+            float opFlangeRim = bell((z - gillZ - 0.065) / 0.055) * gillLength;
+            float gillFold = bell((z - gillZ) / 0.022) * gillLength;
+            albedo = mix(albedo, vec3(0.94, 0.62, 0.22), opFlangeRim * 0.42);
+            albedo = mix(albedo, vec3(0.32, 0.11, 0.04), gillFold * 0.55);
+            albedo = mix(albedo, vec3(0.16, 0.04, 0.02), vRelief.y * 0.92);
+
+            float eyeSocket = oval(flank, vec2(${glslF(EYE_Z2)}, ${glslF(EYE_Y2)}), vec2(0.132, 0.118));
+            float nostril = oval(flank, vec2(${glslF(EYE_Z2 + 0.24)}, ${glslF(EYE_Y2 - 0.04)}), vec2(0.026, 0.018));
+            albedo *= 1.0 - eyeSocket * 0.34 - nostril * 0.62;
+            albedo *= 1.0 - vRelief.z * 0.55 - vRelief.w * 0.38;
+            albedo *= 1.0 + head * (grain - 0.5) * 0.12;
+
+            // Lábios carnosos dourado-alaranjados com fenda bucal profunda
+            float lipY = (${glslF(MOUTH_TIP_Y2)} - ${glslF(MOUTH_SLOPE2)} * min(t, ${glslF(MOUTH_END2)})) *
+              (1.0 - smoothstep(${glslF(MOUTH_END2)}, ${glslF(MOUTH_SETTLE2)}, t));
+            float lipMask = 1.0 - smoothstep(0.105, ${glslF(MOUTH_END2)}, t);
+            float lipCrease = bell((y - lipY) / 0.014) * lipMask;
+            float lips = bell((y - lipY) / 0.058) * lipMask;
+            float lipHighlight = bell((y - lipY + 0.028) / 0.022) * lipMask;
+            albedo = mix(albedo, vec3(0.88, 0.58, 0.21), lips * 0.70);
+            albedo = mix(albedo, vec3(0.14, 0.06, 0.03), max(lipCrease * 0.65, vRelief.x * 0.88));
+            albedo += vec3(0.10, 0.06, 0.02) * lipHighlight * (1.0 - vRelief.x);
+
+            // Bump map mais marcado das escamas 3D
+            float height = (scales.x + scales.y * 0.30) * scaleFade * 0.013;
+            vec3 dPdx = dFdx(vWorldPos);
+            vec3 dPdy = dFdy(vWorldPos);
+            vec3 surfaceGradient = normalize(cross(dPdy, Ngeom)) * dFdx(height) +
+              normalize(cross(Ngeom, dPdx)) * dFdy(height);
+            vec3 N = normalize(Ngeom - surfaceGradient * 13.5);
+
+            // Oclusão ambiental real das cavidades (boca, guelra, órbita e sulcos ósseos)
+            float creviceAO = clamp(vRelief.x * 0.82 + vRelief.y * 0.90 + vRelief.z * 0.65 + vRelief.w * 0.52, 0.0, 0.94);
+
+            // Iluminação úmida com duplo lóbulo especular e rebote subaquático
+            float diff = max(dot(N, L), 0.0);
+            float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+            float wetBroad = pow(max(dot(N, H), 0.0), 22.0) * 0.18;
+            float wetSharp = pow(max(dot(N, H), 0.0), 96.0) * (0.28 + scaleFade * scales.x * 0.28);
+            vec3 illumination = mix(vec3(0.50, 0.58, 0.54), vec3(0.84, 0.90, 0.84), Ngeom.y * 0.5 + 0.5);
+            vec3 color = albedo * (illumination + vec3(0.62, 0.57, 0.45) * diff) * (1.0 - creviceAO * 0.62);
+
+            // Brilho úmido sobre escamas e barras + contorno subaquático frio sob o queixo/ventre
+            float specMask = (1.0 - min(1.0, marks) * 0.38) * (1.0 - creviceAO * 0.95);
+            float sheen = smoothstep(0.02, 0.62, y) * (0.28 + 0.72 * (1.0 - head));
+            color += vec3(0.36, 0.66, 0.52) * sheen * (0.07 + wetBroad * 0.45) * (1.0 - creviceAO * 0.85);
+            color += vec3(1.00, 0.98, 0.92) * (wetBroad * 0.42 + wetSharp) * specMask;
+            float chinRim = fresnel * (1.0 - smoothstep(-0.58, 0.05, Ngeom.y)) * smoothstep(0.15, 1.8, z);
+            color += vec3(0.55, 0.92, 0.95) * (fresnel * 0.08 + chinRim * 0.36) * (1.0 - creviceAO * 0.80);
+
+            float caustics = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
+            color += vec3(0.38, 0.80, 0.73) * caustics * 0.16 * uCausticsIntensity *
+              smoothstep(-0.22, 0.76, Ngeom.y) * (1.0 - creviceAO * 0.75);
+
+            if (vOralSurface > 0.5) {
+              vec3 mouthCol = mix(vec3(0.32, 0.12, 0.09), vec3(0.07, 0.03, 0.03), smoothstep(0.015, 0.15, t));
+              float gum = smoothstep(0.35, 0.49, abs(vUv.y - 0.5)) * (1.0 - smoothstep(0.06, 0.16, t));
+              float lipRimCol = 0.78 * (1.0 - smoothstep(0.006, 0.055, t));
+              color = mix(mouthCol, vec3(0.55, 0.30, 0.16), max(gum, lipRimCol));
+              color += vec3(0.24, 0.11, 0.08) * wetBroad;
+            }
+
+            float waterAbsorb = clamp((length(cameraPosition - vWorldPos) - 13.0) * 0.012, 0.020, 0.24);
+            color = mix(color, vec3(0.07, 0.26, 0.29), waterAbsorb);
+
+            gl_FragColor = vec4(color, 1.0);
+          }
+        `
+      });
+    }
+
+    // Olho realista encaixado na órbita com íris vermelho-rubi profunda, borda escura e brilho vítreo
+    function createPeacockEyeMaterial(fishUniforms, sideSign, eyeOffset) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...fishUniforms,
+          uSideSign: { value: sideSign },
+          uEyeOffset: { value: eyeOffset.clone() }
+        },
+        vertexShader: /* glsl */ `
+          uniform vec3 uEyeOffset;
+          varying vec3 vLocalNorm;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+          ${FISH_DEFORM_V2_GLSL}
+          void main() {
+            vLocalNorm = normalize(normal);
+            vec3 p = position + uEyeOffset;
+            vec3 dp = deformFishPosition2(p);
+            vec3 dn = deformFishNormal2(p, normal);
+            vec4 wp = modelMatrix * vec4(dp, 1.0);
+            vWorldPos = wp.xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * dn);
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uSideSign;
+          varying vec3 vLocalNorm;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+          void main() {
+            vec3 nLoc = normalize(vLocalNorm);
+            vec3 gaze = normalize(vec3(uSideSign * 0.94, 0.04, 0.24));
+            vec3 tangent = normalize(cross(vec3(0.0, 1.0, 0.0), gaze));
+            vec3 up = cross(gaze, tangent);
+            float r = acos(clamp(dot(nLoc, gaze), -1.0, 1.0));
+            float ang = atan(dot(nLoc, up), dot(nLoc, tangent));
+            float fibers = 0.86 + 0.09 * sin(ang * 26.0 + sin(ang * 6.0)) + 0.05 * sin(ang * 41.0);
+
+            // Transição escura com a pálpebra -> anel externo prateado sutil -> íris rubi profunda -> pupila
+            vec3 col = mix(vec3(0.08, 0.09, 0.07), vec3(0.54, 0.50, 0.42), 1.0 - smoothstep(0.68, 0.80, r));
+            col = mix(col, vec3(0.72, 0.12, 0.07) * fibers, 1.0 - smoothstep(0.58, 0.67, r));
+            col = mix(col, vec3(0.88, 0.26, 0.10) * fibers, 1.0 - smoothstep(0.39, 0.48, r));
+            col = mix(col, vec3(0.012, 0.014, 0.016), 1.0 - smoothstep(0.325, 0.385, r));
+
+            vec3 N = normalize(vWorldNormal);
+            vec3 V = normalize(cameraPosition - vWorldPos);
+            vec3 L = normalize(vec3(-0.38, 0.82, 0.43));
+            float diff = 0.74 + 0.26 * max(dot(N, L), 0.0);
+            float reflex = max(dot(N, normalize(L + V)), 0.0);
+            float spec = pow(reflex, 128.0) * 1.15 + pow(reflex, 28.0) * 0.10;
+            gl_FragColor = vec4(col * diff + vec3(0.96, 0.98, 1.0) * spec, 1.0);
+          }
+        `
+      });
+    }
+
+    // Nadadeiras fiéis à referência (cauda bicolor verde/vermelho com ocelo grande, dorsal verde-sálvia, anal e pélvicas laranja-vermelho)
+    function createPeacockFinMaterial(fishUniforms, finType, sideSign = 0, pivot = new THREE.Vector3()) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...globalFishUniforms,
+          ...fishUniforms,
+          uFinType: { value: finType },
+          uSideSign: { value: sideSign },
+          uPivot: { value: pivot.clone() }
+        },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        vertexShader: /* glsl */ `
+          uniform int uFinType;
+          uniform float uSideSign;
+          uniform vec3 uPivot;
+          uniform float uPectoralSpread;
+          uniform float uPectoralRowL;
+          uniform float uPectoralRowR;
+          uniform float uDorsalFlare;
+          uniform float uTime;
+
+          varying vec2 vUv;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${FISH_DEFORM_V2_GLSL}
+
+          void main() {
+            vUv = uv;
+            vec3 p = position;
+            vec3 n = normal;
+
+            if (uFinType == 0) {
+              float edgeLag = abs(uv.y - 0.5) * 0.45;
+              float whip = sin(uSwimPhase - 4.7 - uv.x * 2.15 - edgeLag) * (uTailAmp * 0.30) * pow(uv.x, 1.45);
+              float silkTip = sin(uIdleDriftPhase - uv.x * 2.8 - uv.y * 1.8) * 0.032 * pow(uv.x, 1.8);
+              p.x += whip + silkTip;
+            } else if (uFinType == 1) {
+              float flareScale = mix(0.62, 1.06, uDorsalFlare);
+              float baseY = p.y - uv.y * 0.45;
+              p.y = mix(p.y, baseY + uv.y * 0.45 * flareScale, uv.y);
+              float sBody = fishLengthFraction2(p.z);
+              p.x += sin(uSwimPhase - sBody * 4.9 - uv.y * 0.7) * (uTailAmp * 0.14 + 0.015) * uv.y;
+            } else if (uFinType == 2 || uFinType == 3) {
+              float sBody = fishLengthFraction2(p.z);
+              float wave = sin(uSwimPhase - sBody * 4.9 - uv.y * 1.25 - uv.x * 1.1) * (uTailAmp * 0.25 + 0.032) * uv.y;
+              p.x += wave;
+            } else if (uFinType == 4) {
+              float row = (uSideSign > 0.0) ? uPectoralRowL : uPectoralRowR;
+              float phaseLag = uv.y * 1.35;
+              float angleY = uSideSign * (uPectoralSpread + row * cos(phaseLag));
+              float featherZ = sin(uTime * 4.6 + (uSideSign > 0.0 ? 0.0 : 3.14159) - phaseLag) * 0.095 * uv.x;
+              float c = cos(angleY);
+              float s = sin(angleY);
+              vec3 q = vec3(p.x * c - p.z * s, p.y + featherZ, p.x * s + p.z * c);
+              p = uPivot + q;
+              n = vec3(n.x * c - n.z * s, n.y, n.x * s + n.z * c);
+            } else if (uFinType == 5) {
+              float tuck = mix(0.36, 0.0, clamp(uPectoralSpread * 1.4, 0.0, 1.0));
+              float c = cos(tuck);
+              float s = sin(tuck);
+              vec3 q = vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c);
+              p = uPivot + q;
+              n = vec3(n.x, n.y * c - n.z * s, n.y * s + n.z * c);
+            }
+
+            vec3 dp = deformFishPosition2(p);
+            vec3 dn = deformFishNormal2(p, n);
+
+            vec4 wp = modelMatrix * vec4(dp, 1.0);
+            vWorldPos = wp.xyz;
+            vWorldNormal = normalize(mat3(modelMatrix) * dn);
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform int uFinType;
+          uniform float uTime;
+          uniform float uCausticsIntensity;
+          varying vec2 vUv;
+          varying vec3 vWorldPos;
+          varying vec3 vWorldNormal;
+
+          ${CAUSTICS_GLSL}
+
+          float hash21(vec2 p) {
+            p = fract(p * vec2(127.1, 311.7));
+            p += dot(p, p + 41.3);
+            return fract(p.x * p.y);
+          }
+
+          float edgeFade(float coord, float width) {
+            return smoothstep(0.0, width, coord) * (1.0 - smoothstep(1.0 - width, 1.0, coord));
+          }
+
+          float finRays(float coord, float count, float offset) {
+            float band = coord * count + offset;
+            float ray = 1.0 - smoothstep(0.08, 0.29, abs(fract(band) - 0.5));
+            return mix(ray, 0.28, smoothstep(0.35, 0.96, fwidth(band)));
+          }
+
+          void main() {
+            float u = vUv.x;
+            float v = vUv.y;
+            bool radial = uFinType == 0 || uFinType >= 4;
+            float reach = radial ? u : v;
+            float across = radial ? v : u;
+            float rayCount = 18.0;
+            float opacity = 0.88;
+            vec3 col;
+
+            if (uFinType == 0) {
+              // Cauda bicolor: verde-oliva translúcido em cima + laranja-vermelho estriado embaixo
+              float split = smoothstep(0.43, 0.49, v + 0.02 * sin(u * 4.0));
+              vec3 upper = mix(vec3(0.26, 0.46, 0.26), vec3(0.40, 0.56, 0.36), smoothstep(0.08, 0.80, u));
+              vec3 lower = mix(vec3(0.84, 0.34, 0.09), vec3(0.90, 0.26, 0.07), smoothstep(0.05, 0.78, u));
+              col = mix(lower, upper, split);
+              rayCount = 26.0;
+              opacity = mix(0.95, 0.86, split);
+            } else if (uFinType == 1) {
+              // Dorsal espinhosa verde-sálvia pálida translúcida
+              col = mix(vec3(0.32, 0.47, 0.27), vec3(0.48, 0.59, 0.40), smoothstep(0.05, 0.88, v));
+              rayCount = 10.0;
+              opacity = 0.82;
+            } else if (uFinType == 2) {
+              // Dorsal mole verde-oliva luminosa
+              col = mix(vec3(0.30, 0.45, 0.26), vec3(0.44, 0.58, 0.36), smoothstep(0.08, 0.90, v));
+              rayCount = 18.0;
+              opacity = 0.84;
+            } else if (uFinType == 3) {
+              // Anal laranja-vermelho vivo com raios definidos
+              col = mix(vec3(0.84, 0.34, 0.10), vec3(0.93, 0.28, 0.08), smoothstep(0.08, 0.85, v));
+              col = mix(col, vec3(0.96, 0.60, 0.34), (1.0 - smoothstep(0.02, 0.14, u)) * 0.45);
+              rayCount = 16.0;
+              opacity = 0.93;
+            } else if (uFinType == 4) {
+              // Peitoral âmbar-dourado translúcido
+              col = mix(vec3(0.84, 0.62, 0.22), vec3(0.93, 0.80, 0.48), smoothstep(0.10, 0.96, u));
+              rayCount = 14.0;
+              opacity = 0.72;
+            } else {
+              // Pélvica longa laranja-vermelha com borda frontal clara
+              col = mix(vec3(0.84, 0.34, 0.10), vec3(0.91, 0.26, 0.08), smoothstep(0.08, 0.90, u));
+              col = mix(col, vec3(0.96, 0.66, 0.42), (1.0 - smoothstep(0.01, 0.14, v)) * 0.55);
+              rayCount = 10.0;
+              opacity = 0.94;
+            }
+
+            float rayBend = uFinType == 1 ? 0.26 : 0.22 * sin(across * 5.0) * reach;
+            float rays = finRays(across, rayCount, rayBend);
+            float fiberGrain = hash21(floor(vec2(across * rayCount, reach * 20.0)) + float(uFinType) * 19.0);
+            float rayContrast = (uFinType == 0 && v < 0.47) || uFinType == 3 || uFinType == 5 ? 0.32 : 0.20;
+            col *= 0.84 + rayContrast * rays + (fiberGrain - 0.5) * 0.08;
+
+            // Ocelos na cauda: grande na transição verde/laranja + menor atrás/acima
+            float ocellusMask = 0.0;
+            if (uFinType == 0) {
+              float dMain = length((vUv - vec2(0.21, 0.52)) / vec2(0.078, 0.072));
+              float haloMain = 1.0 - smoothstep(0.84, 1.18, dMain);
+              float coreMain = 1.0 - smoothstep(0.58, 0.74, dMain);
+              col = mix(col, vec3(0.92, 0.78, 0.24), haloMain * 0.92);
+              col = mix(col, vec3(0.025, 0.032, 0.024), coreMain);
+
+              float dSec = length((vUv - vec2(0.37, 0.64)) / vec2(0.036, 0.033));
+              float haloSec = 1.0 - smoothstep(0.82, 1.24, dSec);
+              float coreSec = 1.0 - smoothstep(0.48, 0.68, dSec);
+              col = mix(col, vec3(0.92, 0.80, 0.28), haloSec * 0.85);
+              col = mix(col, vec3(0.03, 0.035, 0.025), coreSec * 0.95);
+              ocellusMask = max(haloMain, haloSec);
+            }
+
+            float edge = edgeFade(across, 0.042) * (1.0 - smoothstep(0.95, 1.0, reach));
+            float alpha = max(opacity, ocellusMask * 0.96) * edge * mix(1.0, 0.82, reach) * (0.86 + 0.14 * rays);
+
+            vec3 N = normalize(vWorldNormal);
+            vec3 V = normalize(cameraPosition - vWorldPos);
+            vec3 L = normalize(vec3(-0.38, 0.82, 0.43));
+            float transmit = 0.34 * abs(dot(N, L)) + 0.14 * max(0.0, dot(vec3(0.0, 1.0, 0.0), L));
+            float rim = pow(1.0 - abs(dot(N, V)), 2.5);
+            float specExp = uFinType >= 4 ? 32.0 : 40.0;
+            float specStrength = uFinType >= 4 ? 0.19 : 0.12;
+            float spec = pow(abs(dot(N, normalize(L + V))), specExp) * (specStrength + 0.16 * rays);
+            col *= 0.74 + transmit;
+            col += vec3(0.74, 0.90, 0.78) * (spec + rim * 0.08);
+
+            float caustics = layeredCaustics(vWorldPos.xz * 1.05, uTime * 1.05);
+            col += vec3(0.38, 0.80, 0.73) * caustics * 0.11 * uCausticsIntensity;
+            float waterAbsorb = clamp((length(cameraPosition - vWorldPos) - 13.0) * 0.012, 0.020, 0.24);
+            col = mix(col, vec3(0.07, 0.26, 0.29), waterAbsorb);
+
+            gl_FragColor = vec4(col, alpha);
+          }
+        `
+      });
+    }
+
+    function createPeacockShadowMaterial(fishUniforms) {
+      return new THREE.ShaderMaterial({
+        uniforms: {
+          ...globalFishUniforms,
+          ...fishUniforms,
+          uShadowOpacity: { value: 0.28 }
+        },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        vertexShader: /* glsl */ `
+          uniform float uTime;
+          varying vec2 vShadowUv;
+          ${FISH_DEFORM_V2_GLSL}
+          void main() {
+            vShadowUv = uv;
+            vec3 p = position;
+            p.x += spineOffsetX2(p.z);
+            p.x += sin(p.z * 1.3 + uTime * 1.5) * 0.04;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+          }
+        `,
+        fragmentShader: /* glsl */ `
+          uniform float uShadowOpacity;
+          varying vec2 vShadowUv;
+          void main() {
+            vec2 d = (vShadowUv - vec2(0.5, 0.5)) * 2.0;
+            float taper = mix(1.0, 1.8, smoothstep(0.45, 1.0, vShadowUv.y));
+            float dist = length(vec2(d.x * taper, d.y));
+            float soft = exp(-dist * dist * 3.0) * smoothstep(1.0, 0.35, dist);
+            gl_FragColor = vec4(0.012, 0.058, 0.068, uShadowOpacity * soft);
+          }
+        `
+      });
+    }
+
+    function createPeacockBass() {
+      const fishUniforms = {
+        uSwimPhase: { value: 1.4 },
+        uTailAmp: { value: 0.14 },
+        uSpineCurve: { value: 0.0 },
+        uPectoralSpread: { value: 0.42 },
+        uPectoralRowL: { value: 0.0 },
+        uPectoralRowR: { value: 0.0 },
+        uDorsalFlare: { value: 0.72 },
+        uBreathPhase: { value: 0.8 },
+        uIdleDriftPhase: { value: 1.1 },
+        uMouthOpen: { value: 0.0 }
+      };
+
+      const group = new THREE.Group();
+      group.rotation.order = 'YXZ';
+      scene.add(group);
+
+      const bodyMesh = new THREE.Mesh(peacockGeos.body, createPeacockBodyMaterial(fishUniforms));
+      bodyMesh.renderOrder = 4;
+      group.add(bodyMesh);
+
+      const caudalMesh = new THREE.Mesh(peacockGeos.caudal, createPeacockFinMaterial(fishUniforms, 0));
+      caudalMesh.renderOrder = 5;
+      group.add(caudalMesh);
+
+      const spinyDorsalMesh = new THREE.Mesh(peacockGeos.spinyDorsal, createPeacockFinMaterial(fishUniforms, 1));
+      spinyDorsalMesh.renderOrder = 5;
+      group.add(spinyDorsalMesh);
+
+      const softDorsalMesh = new THREE.Mesh(peacockGeos.softDorsal, createPeacockFinMaterial(fishUniforms, 2));
+      softDorsalMesh.renderOrder = 5;
+      group.add(softDorsalMesh);
+
+      const analMesh = new THREE.Mesh(peacockGeos.anal, createPeacockFinMaterial(fishUniforms, 3));
+      analMesh.renderOrder = 5;
+      group.add(analMesh);
+
+      const pectLMesh = new THREE.Mesh(peacockGeos.pectL, createPeacockFinMaterial(fishUniforms, 4, 1, pectLPivot2));
+      pectLMesh.renderOrder = 6;
+      group.add(pectLMesh);
+
+      const pectRMesh = new THREE.Mesh(peacockGeos.pectR, createPeacockFinMaterial(fishUniforms, 4, -1, pectRPivot2));
+      pectRMesh.renderOrder = 6;
+      group.add(pectRMesh);
+
+      const pelvLMesh = new THREE.Mesh(peacockGeos.pelvL, createPeacockFinMaterial(fishUniforms, 5, 1, pelvLPivot2));
+      pelvLMesh.renderOrder = 5;
+      group.add(pelvLMesh);
+
+      const pelvRMesh = new THREE.Mesh(peacockGeos.pelvR, createPeacockFinMaterial(fishUniforms, 5, -1, pelvRPivot2));
+      pelvRMesh.renderOrder = 5;
+      group.add(pelvRMesh);
+
+      const eyeLMesh = new THREE.Mesh(peacockGeos.eye, createPeacockEyeMaterial(fishUniforms, 1, eyeLPos2));
+      eyeLMesh.renderOrder = 5;
+      group.add(eyeLMesh);
+
+      const eyeRMesh = new THREE.Mesh(peacockGeos.eye, createPeacockEyeMaterial(fishUniforms, -1, eyeRPos2));
+      eyeRMesh.renderOrder = 5;
+      group.add(eyeRMesh);
+
+      const shadowGroup = new THREE.Group();
+      scene.add(shadowGroup);
+      const shadowMat = createPeacockShadowMaterial(fishUniforms);
+      const shadowPlaneGeo = new THREE.PlaneGeometry(1.70, 5.5, 8, 28);
+      shadowPlaneGeo.rotateX(-Math.PI / 2);
+      const shadowBody = new THREE.Mesh(shadowPlaneGeo, shadowMat);
+      shadowBody.renderOrder = 1;
+      shadowGroup.add(shadowBody);
+
+      return {
+        id: 2,
+        uniforms: fishUniforms,
+        group,
+        shadowGroup,
+        shadowMat,
+
+        pos: isInspect ? new THREE.Vector3(0.0, 0.0, 0.0) : new THREE.Vector3(2.2, -0.22, -0.65),
+        targetY: -0.22,
+        velY: 0,
+        heading: -Math.PI * 0.48,
+        pitch: 0,
+        roll: 0,
+        speed: isInspect ? 0.0 : 1.25,
+        prevSpeed: 1.25,
+        acceleration: 0,
+        angularVelocity: 0,
+
+        state: 'PATROL',
+        stateTimer: 0,
+        hoverDuration: 0,
+        nextHoverIn: 5.4,
+        strikeDuration: 0.40,
+        fleeTimer: 0,
+        fleeCooldown: 0,
+        fleeHeadingOffset: 0,
+
+        kickCycleTimer: 1.2,
+        kickBurstLeft: 0.35,
+
+        waypoint: new THREE.Vector3(-4.4, 0.2, 0.45),
+        waypointTimer: 0,
+        curiosityOrbitSign: -1,
+
+        swimPhase: 1.4,
+        breathPhase: 0.8,
+        idleDriftPhase: 1.1,
+        smoothEffort: 0.22,
+        smoothSpineCurve: 0,
+        smoothPectSpread: 0.42,
+        smoothDorsalFlare: 0.72,
+        pectRowPhase: 1.2,
+        smoothMouthOpen: 0,
+        biteSnapTimer: 0
+      };
+    }
+
+    const tucunareRealista = createPeacockBass();
+    const allFish = [tucunare, tucunareRealista];
 
     // =========================================================================
     // 7. SISTEMA DE ISCAS + BOLHAS DE BOTE
@@ -2055,7 +3379,7 @@
     }
 
     window.addEventListener('pointermove', (e) => {
-      if (!params.interactiveMouse) return;
+      if (!params.interactiveMouse || isInspect) return;
       const pt = projectPointer(e.clientX, e.clientY);
       if (!pt) return;
       const movedDist = Math.hypot(pt.x - mouse.world.x, pt.z - mouse.world.z);
@@ -2086,7 +3410,7 @@
     });
 
     window.addEventListener('pointerdown', (e) => {
-      if (!params.interactiveMouse) return;
+      if (!params.interactiveMouse || isInspect) return;
       if (e.target.closest && e.target.closest('.lil-gui')) return;
       const pt = projectPointer(e.clientX, e.clientY);
       if (!pt) return;
@@ -2155,31 +3479,63 @@
       );
     }
 
-    function updateTucunare(fish, dt) {
+    function updateTucunare(fish, dt, otherFish = null) {
       if (isInspect) {
-        // Modo inspeção: tucunaré pairando em perfil 3/4 de perto para conferência visual
+        const isFish2 = fish.id === 2;
+        if ((inspectFish === '1' && isFish2) || (inspectFish === '2' && !isFish2)) {
+          fish.group.visible = false;
+          fish.shadowGroup.visible = false;
+          return;
+        }
+        fish.group.visible = true;
+        fish.shadowGroup.visible = true;
+
+        // Modo inspeção: tucunaré pairando para conferência visual detalhada
         fish.swimPhase += 2.2 * dt;
         fish.breathPhase += 2.4 * dt;
         fish.idleDriftPhase += 1.6 * dt;
         fish.pectRowPhase += 3.2 * dt;
         fish.uniforms.uSwimPhase.value = fish.swimPhase;
-        fish.uniforms.uTailAmp.value = 0.11;
-        fish.uniforms.uSpineCurve.value = 0.06;
+        fish.uniforms.uTailAmp.value = inspectFish === '2' ? 0.045 : 0.11;
+        fish.uniforms.uSpineCurve.value = inspectFish === '2' ? 0.02 : 0.06;
         fish.uniforms.uPectoralSpread.value = 0.48;
-        fish.uniforms.uPectoralRowL.value = Math.sin(fish.pectRowPhase) * 0.18;
-        fish.uniforms.uPectoralRowR.value = -Math.sin(fish.pectRowPhase) * 0.18;
-        fish.uniforms.uDorsalFlare.value = 0.92;
+        fish.uniforms.uPectoralRowL.value = Math.sin(fish.pectRowPhase) * 0.14;
+        fish.uniforms.uPectoralRowR.value = -Math.sin(fish.pectRowPhase) * 0.14;
+        fish.uniforms.uDorsalFlare.value = 0.94;
         fish.uniforms.uBreathPhase.value = fish.breathPhase;
         fish.uniforms.uIdleDriftPhase.value = fish.idleDriftPhase;
         fish.uniforms.uMouthOpen.value = isInspectMouth ? 0.95 : 0.0;
-        fish.group.position.set(0, 0.05, 0);
-        fish.group.rotation.set(-0.04, Math.PI * 0.44, 0);
-        fish.group.scale.setScalar(params.fishScale * 1.15);
-        fish.shadowGroup.position.set(0.95, RIVERBED_Y + 0.14, -0.45);
-        fish.shadowGroup.rotation.y = Math.PI * 0.44;
-        fish.shadowGroup.scale.setScalar(params.fishScale * 1.25);
+
+        if (inspectFish === '2') {
+          const rotY2 = inspectAngle === '34' ? -Math.PI * 0.42 : -Math.PI * 0.5;
+          const rotX2 = inspectAngle === '34' ? -0.04 : 0.0;
+          fish.group.position.set(0, 0.0, 0);
+          fish.group.rotation.set(rotX2, rotY2, 0);
+          fish.group.scale.setScalar(params.fishScale * 1.12);
+          fish.shadowGroup.position.set(0.95, RIVERBED_Y + 0.14, -0.45);
+          fish.shadowGroup.rotation.y = rotY2;
+          fish.shadowGroup.scale.setScalar(params.fishScale * 1.22);
+        } else if (inspectFish === '1') {
+          fish.group.position.set(0, 0.05, 0);
+          fish.group.rotation.set(-0.04, Math.PI * 0.44, 0);
+          fish.group.scale.setScalar(params.fishScale * 1.15);
+          fish.shadowGroup.position.set(0.95, RIVERBED_Y + 0.14, -0.45);
+          fish.shadowGroup.rotation.y = Math.PI * 0.44;
+          fish.shadowGroup.scale.setScalar(params.fishScale * 1.25);
+        } else {
+          // Comparação simultânea: peixe 1 acima, peixe 2 abaixo, ambos voltados para a esquerda
+          const yOff = isFish2 ? -1.28 : 1.28;
+          const rotYBoth = inspectAngle === '34' ? -Math.PI * 0.43 : -Math.PI * 0.5;
+          fish.group.position.set(0, yOff, 0);
+          fish.group.rotation.set(0.0, rotYBoth, 0);
+          fish.group.scale.setScalar(params.fishScale * 0.94);
+          fish.shadowGroup.visible = false;
+        }
         return;
       }
+
+      fish.group.visible = true;
+      fish.shadowGroup.visible = true;
 
       fish.stateTimer += dt;
       if (fish.fleeCooldown > 0) fish.fleeCooldown -= dt;
@@ -2424,6 +3780,24 @@
         steerZ += over * over * 9.5;
       }
 
+      // Separação suave entre os dois tucunarés para evitar sobreposição
+      if (otherFish) {
+        const dxSep = fish.pos.x - otherFish.pos.x;
+        const dzSep = fish.pos.z - otherFish.pos.z;
+        const dHoriz = Math.hypot(dxSep, dzSep);
+        if (dHoriz < 3.2 && dHoriz > 0.001) {
+          const push = 1.0 - dHoriz / 3.2;
+          steerX += (dxSep / dHoriz) * push * 5.2;
+          steerZ += (dzSep / dHoriz) * push * 5.2;
+        }
+        if (dHoriz < 2.2) {
+          const dySep = fish.pos.y - otherFish.pos.y;
+          if (Math.abs(dySep) < 0.8) {
+            desiredY += (fish.id === 2 ? -1 : 1) * 0.45 * (1.0 - dHoriz / 2.2);
+          }
+        }
+      }
+
       const desiredHeading = Math.atan2(steerX, steerZ);
       const angleDiff = normalizeAngle(desiredHeading - fish.heading);
 
@@ -2492,8 +3866,12 @@
       fish.uniforms.uIdleDriftPhase.value = fish.idleDriftPhase;
       fish.uniforms.uMouthOpen.value = fish.smoothMouthOpen;
 
-      // Informa a posição do tucunaré para as algas balançarem na sua esteira
-      algaeUniforms.uFishPos.value.copy(fish.pos);
+      // Informa a posição de cada tucunaré para as algas balançarem na sua esteira
+      if (fish.id === 2) {
+        algaeUniforms.uFishPos2.value.copy(fish.pos);
+      } else {
+        algaeUniforms.uFishPos.value.copy(fish.pos);
+      }
 
       // 6. Transformações 3D + sombra no leito arenoso
       const s = params.fishScale;
@@ -2622,13 +4000,25 @@
       lastNow = now;
       clockTime += dt;
 
-      // Micro-flutuação sutil de lente subaquática
+      // Micro-flutuação sutil de lente subaquática (ou órbita livre em inspeção)
       if (!isInspect) {
         camera.position.set(
           CAM_BASE.x + Math.sin(clockTime * 0.25) * 0.14,
           CAM_BASE.y + Math.cos(clockTime * 0.19) * 0.09,
           CAM_BASE.z
         );
+        camera.lookAt(CAM_TARGET);
+      } else {
+        const off = inspectBaseOffset.clone().multiplyScalar(inspectOrbit.zoom);
+        const cosP = Math.cos(inspectOrbit.pitch);
+        const sinP = Math.sin(inspectOrbit.pitch);
+        const y1 = off.y * cosP - off.z * sinP;
+        const z1 = off.y * sinP + off.z * cosP;
+        const cosY = Math.cos(inspectOrbit.yaw);
+        const sinY = Math.sin(inspectOrbit.yaw);
+        const x2 = off.x * cosY + z1 * sinY;
+        const z2 = -off.x * sinY + z1 * cosY;
+        camera.position.set(CAM_TARGET.x + x2, CAM_TARGET.y + y1, CAM_TARGET.z + z2);
         camera.lookAt(CAM_TARGET);
       }
 
@@ -2642,7 +4032,8 @@
 
       updateMouseState(dt);
       updateBaitsAndBubbles(dt);
-      updateTucunare(tucunare, dt);
+      updateTucunare(tucunare, dt, tucunareRealista);
+      updateTucunare(tucunareRealista, dt, tucunare);
 
       renderer.render(scene, camera);
     }
