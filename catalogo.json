@@ -47,7 +47,7 @@
     "destino": "tucunare-lagoon",
     "arquivos": [
       "LivelyInfo.json", "LivelyProperties.json", "index.html", "thumbnail.jpg",
-      "preview.html", "Abrir-previa.cmd", "README.md",
+      "preview.html", "Abrir-previa.cmd", "README.md", "piranha.js",
       "vendor/three.min.js", "vendor/three-LICENSE.txt",
       "vendor/lil-gui.min.js", "vendor/lil-gui-LICENSE.md"
     ]

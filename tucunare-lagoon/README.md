@@ -1,6 +1,6 @@
 # Tucunaré Azul · Visão Isométrica 3D
 
-Um papel de parede interativo 3D para **Lively Wallpaper** baseado na arquitetura do `koi-pond`, mas com câmera **lateral-isométrica** e um **tucunaré azul (*Cichla piquiti*)** modelado proceduralmente em Three.js + GLSL.
+Um papel de parede interativo 3D para **Lively Wallpaper**, com câmera **lateral-isométrica** e arquitetura baseada no `koi-pond`. A lagoa reúne **dois modelos de tucunaré azul (*Cichla piquiti*)** e **uma piranha-vermelha**, modelados proceduralmente em Three.js + GLSL.
 
 ## Destaques
 
@@ -12,13 +12,19 @@ Um papel de parede interativo 3D para **Lively Wallpaper** baseado na arquitetur
   - **Espreita e Bote (Stalk → Strike):** ao clicar na água para soltar uma isca (ou ao pressionar `Espaço`), o tucunaré gira na direção dela, eriça a dorsal espinhosa e dispara abrindo a boca para engolir a isca com bolhas e ondulação.
   - **Reação ao cursor:** movimentos bruscos muito próximos geram arrancada defensiva; cursor parado desperta observação cautelosa.
 
+## Piranha-vermelha
+
+A piranha-vermelha (*Pygocentrus nattereri*) divide a lagoa com os dois tucunarés. O corpo alto, o focinho curto, a mandíbula arredondada, o ventre vermelho e a cauda bifurcada seguem as fotografias de referência. A boca fica entreaberta, com a cavidade e as duas fileiras de dentes modeladas em 3D. Nesta etapa ela paira ao fundo com batidas leves da cauda. [Referência anatômica do Smithsonian](https://nationalzoo.si.edu/animals/red-bellied-piranha).
+
 ## Prévia local
 
 Execute `Abrir-previa.cmd` ou abra `preview.html` no navegador.
 
 - Tecla **`P`** ou **`H`**: exibe/oculta o painel de controles (`lil-gui`).
 - Tecla **`Espaço`** ou **clique na água**: solta uma isca para o tucunaré atacar.
-- Para conferir a anatomia de perto, abra `index.html?inspect` no navegador. Use `index.html?inspect&mouth` para ver a abertura da boca durante o bote.
+- [Ver os três peixes](index.html?inspect=peixes) ou [inspecionar a piranha de perto](index.html?inspect=piranha).
+- Compare os dois tucunarés em `index.html?inspect` ou isole um deles com `&fish=1` ou `&fish=2`. Acrescente `&mouth` para ver a abertura da boca ou `&angle=34` para a vista em três quartos do tucunaré V2.
+- Na inspeção, arraste para girar a câmera e use a roda do mouse para aproximar.
 
 ## Referência visual
 
