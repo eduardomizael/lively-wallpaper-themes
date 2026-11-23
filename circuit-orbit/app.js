@@ -11,7 +11,9 @@
   let collectionTimer = null, collectionDeadline = null, collectionStarted = 0;
   const field = new A.Atmosphere(1, 1);
   const fluid = new window.CircuitMouseFluid.MouseFluid(document.querySelector('#mouse-fluid'));
-  const shotFluid = new window.CircuitShotFluid.ShotFluid(document.querySelector('#shot-fluid'));
+  const shotFluid = new window.CircuitShotFluid.ShotFluid(document.querySelector('#shot-fluid'), fluid);
+  const fluidStepConfig = { mouseFog: true, mouseFogStrength: 35, accent: config.accent };
+  let livelyPaused = false, hiddenPaused = Boolean(document.hidden), paused = livelyPaused || hiddenPaused;
   const makeCanvas = (width, height) => { const image = document.createElement('canvas'); image.width = width; image.height = height; return image; };
   let sprites = A.createSprites(makeCanvas, config.accent), fogDirty = true, lastFog = -1;
   controls.hidden = !preview;
@@ -25,7 +27,7 @@
   config.clickBurst = true;
   const rgba = alpha => `rgba(${rgb},${alpha})`;
   function schedule() {
-    if ((system?.icons.length || field.moving(config) || fluid.active || shotFluid.active) && !framePending) { framePending = true; requestAnimationFrame(frame); }
+    if (!paused && (system?.icons.length || field.moving(config) || fluid.active || shotFluid.active) && !framePending) { framePending = true; requestAnimationFrame(frame); }
   }
   function resize() {
     width = innerWidth; height = innerHeight;
@@ -97,7 +99,7 @@
     if (name === 'accent') { sprites = A.createSprites(makeCanvas, config.accent); nucleusSprites = window.CircuitNucleus.createSprites(makeCanvas, config.accent); }
     if (name === 'accent' || name === 'fogStrength') fogDirty = true;
     if (name === 'impactStrength' && !value) field.waves = [];
-    if ((name === 'mouseFog' || name === 'mouseFogStrength') && !value) {field.clearPointer();fluid.clear();}
+    if ((name === 'mouseFog' || name === 'mouseFogStrength') && !value) {field.clearPointer();if(!shotFluid.active)fluid.clear();}
     rgb = [1, 3, 5].map(start => parseInt(config.accent.slice(start, start + 2), 16)).join(',');
     document.documentElement.style.setProperty('--accent', config.accent);
     document.documentElement.style.setProperty('--grid-color', rgba(.09));
@@ -111,6 +113,19 @@
     if (!system?.icons.length && !field.moving(config)) ctx.clearRect(0, 0, width, height);
   }
   window.livelyPropertyListener = apply;
+  function syncPaused() {
+    const nextPaused = livelyPaused || hiddenPaused;
+    if (nextPaused === paused) return;
+    paused = nextPaused;
+    if (!paused) { lastDraw = null; nextDraw = 0; schedule(); }
+  }
+  window.livelyWallpaperPlaybackChanged = data => {
+    let parsed = data;
+    try { if (typeof data === 'string') parsed = JSON.parse(data); } catch { parsed = null; }
+    livelyPaused = Boolean(parsed && parsed.IsPaused);
+    syncPaused();
+  };
+  document.addEventListener?.('visibilitychange', () => { hiddenPaused = Boolean(document.hidden); syncPaused(); });
   function finishCollection(message) {
     clearInterval(collectionTimer); clearTimeout(collectionDeadline); collecting = false;
     document.querySelector('#collectIcons').disabled = false;
@@ -152,6 +167,7 @@
   addEventListener('blur', () => field.leavePointer());
   function frame(now) {
     framePending = false;
+    if (paused) return;
     if (!system?.icons.length && !field.moving(config) && !fluid.active && !shotFluid.active) { ctx.clearRect(0, 0, width, height); return; }
     const interval = 1000 / (config.frameRate === 0 ? 30 : 60);
     if (now + .4 < nextDraw) { schedule(); return; }
@@ -160,7 +176,6 @@
     lastDraw = now;
     nextDraw = nextDraw && now - nextDraw < interval ? nextDraw + interval : now + interval;
     field.update(dt);
-    fluid.update(dt,config);
     const previousSequence = system?.sequence;
     const shotBefore = shotFluid.capture(system);
     system?.update(dt);
@@ -168,6 +183,13 @@
     canvas.dataset.orbRenderer = config.markerStyle>=2?(oriOrbs.ready?'v7':oriOrbs.failed?'compatibility':'idle'):'off';
     if(oriOrbs.stats.frames) canvas.dataset.orbSubmitMs = (oriOrbs.stats.totalMs/oriOrbs.stats.frames).toFixed(2);
     shotFluid.update(dt,system,shotBefore,config);
+    const fluidEnabled = (config.mouseFog && config.mouseFogStrength > 0) || shotFluid.active;
+    fluidStepConfig.mouseFog = fluidEnabled;
+    fluidStepConfig.mouseFogStrength = (config.mouseFog && config.mouseFogStrength > 0)
+      ? config.mouseFogStrength
+      : config.glow;
+    fluidStepConfig.accent = config.accent;
+    fluid.update(dt, fluidStepConfig);
     if (config.impactStrength > 0 && system?.sequence !== previousSequence && system?.current) field.impact(system.current);
     if (fogDirty || (config.fogStrength > 0 && field.time - lastFog >= .05)) {
       fogCtx.clearRect(0, 0, width, height);

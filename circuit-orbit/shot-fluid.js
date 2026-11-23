@@ -2,14 +2,14 @@
   'use strict';
   const E=root.CircuitEngine;
   class ShotFluid {
-    constructor(canvas){this.canvas=canvas;this.fluid=null;this.width=1;this.height=1;this.puffs=[];this.time=0;this.manualUntil=0;}
-    get active(){return Boolean(this.fluid?.active||this.puffs.length);}
-    resize(w,h){this.width=w;this.height=h;this.fluid?.resize(w,h);this.puffs=[];}
-    clear(){this.fluid?.clear();this.puffs=[];this.manualUntil=0;}
+    constructor(canvas,sharedFluid=null){this.canvas=canvas;this.shared=Boolean(sharedFluid);this.fluid=sharedFluid;this.width=1;this.height=1;this.puffs=[];this.time=0;this.manualUntil=0;this.activeUntil=0;}
+    get active(){return Boolean((this.shared?this.time<this.activeUntil:this.fluid?.active)||this.puffs.length);}
+    resize(w,h){this.width=w;this.height=h;if(!this.shared)this.fluid?.resize(w,h);this.puffs=[];}
+    clear(){if(!this.shared)this.fluid?.clear();this.puffs=[];this.manualUntil=0;this.activeUntil=0;}
     ensureFluid(){if(!this.fluid){this.fluid=new root.CircuitMouseFluid.MouseFluid(this.canvas);this.fluid.resize(this.width,this.height);}}
     burst(x,y,r=18){
       if(![x,y,r].every(Number.isFinite)||x<0||y<0||x>this.width||y>this.height)return false;
-      this.ensureFluid();this.manualUntil=this.time+1.6;
+      this.ensureFluid();this.manualUntil=this.time+1.6;this.activeUntil=Math.max(this.activeUntil,this.time+Math.max(2.4,this.fluid?.lifetime||2.4));
       this.emit(x,y,0,0,180,2.5,25);
       for(let i=0;i<8;i++){
         const a=i*Math.PI/4+this.time*.7,c=Math.cos(a),s=Math.sin(a);
@@ -18,7 +18,7 @@
     }
     capture(system){return {shot:system?.shot,head:system?.shot?E.shotPosition(system.shot):null,sequence:system?.sequence};}
     emit(x,y,dx,dy,size,density,twist){
-      if(this.fluid.supported){this.fluid.inject(x,y,dx,dy,size,density,twist);return;}
+      if(this.fluid?.supported){this.fluid.inject(x,y,dx,dy,size,density,twist);return;}
       if(x<0||y<0||x>this.width||y>this.height)return;
       this.puffs.push({x,y,size:size*.45,started:this.time,density});if(this.puffs.length>96)this.puffs.shift();
     }
@@ -28,9 +28,12 @@
       const manual=this.time<this.manualUntil,shots=config.shotStyle===1;
       if(!shots&&!manual){if(this.active)this.clear();return;}
       this.ensureFluid();
-      const lifetime=Math.max(.55+config.trail/350,manual?1.6:0);this.fluid.lifetime=lifetime;
+      const lifetime=Math.max(.55+config.trail/350,manual?1.6:0);
+      const sharedLifetime=Math.max(2.4,lifetime);
+      this.fluid.lifetime=this.shared?sharedLifetime:lifetime;
       this.puffs=this.puffs.filter(p=>this.time-p.started<lifetime);
       if(shots&&before.shot){
+        this.activeUntil=Math.max(this.activeUntil,this.time+this.fluid.lifetime);
         const end=system.shot===before.shot?E.shotPosition(system.shot):before.shot.to;
         const start=before.head,dx=end.x-start.x,dy=end.y-start.y,length=Math.hypot(dx,dy);
         const count=Math.min(24,Math.ceil(length/12));
@@ -40,7 +43,7 @@
         const icon=system.current,r=Math.max(10,Math.min(28,icon.radius*.65));
         const until=this.manualUntil;this.burst(icon.x,icon.y,r);this.manualUntil=until;
       }
-      this.fluid.update(dt,{mouseFog:true,mouseFogStrength:config.glow,accent:config.accent});
+      if(!this.shared)this.fluid.update(dt,{mouseFog:true,mouseFogStrength:config.glow,accent:config.accent});
     }
     drawFallback(ctx,sprites,config){
       if(!this.puffs.length||!sprites?.length)return;
