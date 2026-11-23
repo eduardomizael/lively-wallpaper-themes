@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zodiac Sky · Constelações</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="sky-canvas" aria-label="Céu estrelado interativo com constelações do zodíaco"></canvas>
+
+  <section id="controls" hidden>
+    <header>
+      <span class="eyebrow">ATLAS CELESTIAL · PROTÓTIPO ESCORPIÃO</span>
+      <h1>Zodiac Sky<span> / ♏</span></h1>
+      <p>Aproxime o mouse para revelar as linhas da constelação. Clique próximo às estrelas para revelar o desenho etéreo.</p>
+    </header>
+
+    <label>Estrelas de fundo (%) <input id="starDensity" type="range" min="30" max="200" step="10" value="100"></label>
+    <label>Cintilação (%) <input id="twinkleStrength" type="range" min="0" max="100" step="5" value="65"></label>
+    <label>Via Láctea (%) <input id="milkyWay" type="range" min="0" max="100" step="5" value="45"></label>
+    <label>Deriva / Paralaxe (%) <input id="skyDrift" type="range" min="0" max="100" step="5" value="25"></label>
+
+    <h2 class="control-section">Constelação</h2>
+    <label>Raio de aproximação (%) <input id="hoverRadius" type="range" min="50" max="180" step="5" value="100"></label>
+    <label>Brilho das linhas (%) <input id="lineBrightness" type="range" min="20" max="150" step="5" value="80"></label>
+    <label>Opacidade do desenho (%) <input id="artOpacity" type="range" min="20" max="100" step="5" value="72"></label>
+    <label>Auto-esmaecer (s, 0=fixo) <input id="artAutoFade" type="range" min="0" max="60" step="5" value="0"></label>
+    <label>Exibir nomes <input id="showLabels" type="checkbox" checked></label>
+    <label>Interação do mouse <input id="interactiveMouse" type="checkbox" checked></label>
+
+    <div class="btn-row">
+      <button id="toggleArt" type="button">Alternar desenho (Espaço)</button>
+      <button id="hide" type="button" class="secondary">Ocultar painel (P)</button>
+    </div>
+  </section>
+
+  <script src="constellations/scorpius.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -54,5 +54,14 @@
       "vendor/three.min.js", "vendor/three-LICENSE.txt",
       "vendor/lil-gui.min.js", "vendor/lil-gui-LICENSE.md"
     ]
+  },
+  {
+    "id": "zodiac-sky",
+    "destino": "zodiac-sky",
+    "arquivos": [
+      "LivelyInfo.json", "LivelyProperties.json", "index.html", "style.css",
+      "app.js", "constellations/scorpius.js",
+      "preview.html", "Abrir-previa.cmd", "README.md"
+    ]
   }
 ]

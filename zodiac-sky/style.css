@@ -1,0 +1,135 @@
+:root {
+  color-scheme: dark;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --accent: #9bb8ff;
+}
+
+* {
+  box-sizing: border-box;
+  user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #040712;
+}
+
+#sky-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#controls {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 310px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 20px 22px;
+  border: 1px solid rgba(155, 184, 255, 0.22);
+  border-radius: 16px;
+  background: rgba(7, 11, 24, 0.86);
+  box-shadow: 0 20px 64px rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(18px);
+  color: #e3eaf8;
+  z-index: 20;
+}
+
+.eyebrow {
+  font-size: 9px;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+h1 {
+  font-weight: 400;
+  font-size: 22px;
+  margin: 6px 0 6px;
+}
+
+h1 span {
+  color: #8296bf;
+  font-size: 16px;
+}
+
+header p {
+  color: #9aa9c4;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.control-section {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--accent);
+  border-top: 1px solid rgba(155, 184, 255, 0.16);
+  padding-top: 12px;
+  margin: 14px 0 8px;
+}
+
+label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 11px 0;
+  font-size: 12px;
+  color: #cad6ec;
+}
+
+input[type=range] {
+  width: 118px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+input[type=checkbox] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.btn-row {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+button {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(155, 184, 255, 0.32);
+  background: rgba(155, 184, 255, 0.14);
+  color: #eaf0ff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+button:hover {
+  background: rgba(155, 184, 255, 0.24);
+}
+
+button.secondary {
+  background: transparent;
+  border-color: rgba(155, 184, 255, 0.18);
+  color: #a4b4d2;
+}

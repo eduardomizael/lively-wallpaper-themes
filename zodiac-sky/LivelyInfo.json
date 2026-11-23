@@ -1,0 +1,13 @@
+{
+  "AppVersion": "0.1.0.0",
+  "Title": "Zodiac Sky · Constelações",
+  "Thumbnail": "thumbnail.jpg",
+  "Preview": "thumbnail.jpg",
+  "Desc": "Céu estrelado interativo com constelações do zodíaco em estilo atlas celestial etéreo. Aproxime o mouse para revelar as linhas e clique para revelar a ilustração.",
+  "Author": "Eduardo Mizael Clemente",
+  "License": "MIT",
+  "Type": 1,
+  "FileName": "index.html",
+  "Arguments": "",
+  "IsAbsolutePath": false
+}

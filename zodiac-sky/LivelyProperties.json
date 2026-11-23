@@ -1,0 +1,76 @@
+{
+  "starDensity": {
+    "text": "Densidade de Estrelas (%)",
+    "type": "slider",
+    "min": 30,
+    "max": 200,
+    "step": 10,
+    "value": 100
+  },
+  "twinkleStrength": {
+    "text": "Cintilação (%)",
+    "type": "slider",
+    "min": 0,
+    "max": 100,
+    "step": 5,
+    "value": 65
+  },
+  "milkyWay": {
+    "text": "Intensidade da Via Láctea (%)",
+    "type": "slider",
+    "min": 0,
+    "max": 100,
+    "step": 5,
+    "value": 45
+  },
+  "skyDrift": {
+    "text": "Paralaxe / Deriva Suave (%)",
+    "type": "slider",
+    "min": 0,
+    "max": 100,
+    "step": 5,
+    "value": 25
+  },
+  "hoverRadius": {
+    "text": "Raio de Aproximação (%)",
+    "type": "slider",
+    "min": 50,
+    "max": 180,
+    "step": 5,
+    "value": 100
+  },
+  "lineBrightness": {
+    "text": "Brilho das Linhas (%)",
+    "type": "slider",
+    "min": 20,
+    "max": 150,
+    "step": 5,
+    "value": 80
+  },
+  "artOpacity": {
+    "text": "Opacidade do Desenho Etéreo (%)",
+    "type": "slider",
+    "min": 20,
+    "max": 100,
+    "step": 5,
+    "value": 72
+  },
+  "artAutoFade": {
+    "text": "Auto-esmaecer Desenho (segundos, 0 = fixo)",
+    "type": "slider",
+    "min": 0,
+    "max": 60,
+    "step": 5,
+    "value": 0
+  },
+  "showLabels": {
+    "text": "Exibir Nomes da Constelação e Estrelas",
+    "type": "checkbox",
+    "value": true
+  },
+  "interactiveMouse": {
+    "text": "Interação com Mouse",
+    "type": "checkbox",
+    "value": true
+  }
+}
