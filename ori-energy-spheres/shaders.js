@@ -132,6 +132,38 @@
     }
   `;
 
+  // 1b. Splat em lote (até 48 emissores em um único passe full-screen)
+  const EMITTER_SPLAT_BATCH = `
+    uniform sampler2D uSource;
+    uniform int uSplatCount;
+    uniform vec4 uSplatPosRad[48];   // (x, y, radius2, phase)
+    uniform vec4 uSplatImpTwist[48]; // (ix, iy, iz, twist)
+    uniform float uAspect;
+
+    void main() {
+      vec3 acc = texture(uSource, vUv).xyz;
+      for (int i = 0; i < 48; i++) {
+        if (i >= uSplatCount) break;
+        vec4 pr = uSplatPosRad[i];
+        vec4 it = uSplatImpTwist[i];
+        vec2 p = vUv - pr.xy;
+        p.x *= uAspect;
+        float d2 = dot(p, p);
+        if (d2 > pr.z * 9.0) continue;
+        float k = exp(-d2 / max(pr.z, 0.00001));
+        float phase = pr.w;
+        float n1 = fbm(p * 11.0 + vec2(cos(phase), sin(phase)) * 2.0);
+        float n2 = fbm(p * 20.0 - vec2(sin(phase * 1.3), cos(phase * 1.3)) * 1.8);
+        float patchy = smoothstep(0.24, 0.78, n1 * 0.65 + n2 * 0.35);
+
+        vec3 val = it.xyz * (0.45 + 0.85 * patchy);
+        val.xy += vec2(-p.y, p.x) / sqrt(max(pr.z, 0.00001)) * it.w * (0.4 + 0.8 * n1);
+        acc += k * val;
+      }
+      fragColor = vec4(acc, 1.0);
+    }
+  `;
+
   const CURL_FRAG = `
     uniform sampler2D uVelocity;
     void main() {
@@ -539,6 +571,7 @@
     VERT,
     PRELUDE,
     EMITTER_SPLAT,
+    EMITTER_SPLAT_BATCH,
     CURL_FRAG,
     VORTICITY_FRAG,
     DIVERGENCE_FRAG,

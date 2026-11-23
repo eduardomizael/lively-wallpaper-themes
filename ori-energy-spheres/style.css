@@ -36,6 +36,24 @@ html, body {
   pointer-events: none;
 }
 
+#perf-hud {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(8, 12, 20, 0.82);
+  border: 1px solid rgba(255, 195, 75, 0.25);
+  backdrop-filter: blur(12px);
+  color: #dbe8f3;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre;
+  pointer-events: none;
+  z-index: 25;
+}
+
 [hidden] {
   display: none !important;
 }

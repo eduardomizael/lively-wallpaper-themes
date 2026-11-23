@@ -64,5 +64,35 @@
     "text": "Perturbar fumaça com o mouse",
     "type": "checkbox",
     "value": true
+  },
+  "rendererBackend": {
+    "text": "Motor Gráfico",
+    "type": "dropdown",
+    "value": 0,
+    "items": [
+      "Automático (WebGPU → WebGL2)",
+      "WebGPU (Compute Shaders)",
+      "WebGL2 (FBO Batch)"
+    ]
+  },
+  "simQuality": {
+    "text": "Resolução do Fluido",
+    "type": "dropdown",
+    "value": 0,
+    "items": [
+      "Padrão (240px)",
+      "Alta (384px)",
+      "Ultra (512px)"
+    ]
+  },
+  "gpuParticles": {
+    "text": "Partículas GPU (WebGPU)",
+    "type": "checkbox",
+    "value": true
+  },
+  "showStats": {
+    "text": "Exibir HUD de Desempenho",
+    "type": "checkbox",
+    "value": false
   }
 }

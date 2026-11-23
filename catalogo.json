@@ -40,7 +40,7 @@
     "destino": "ori-energy-spheres",
     "arquivos": [
       "LivelyInfo.json", "LivelyProperties.json", "index.html", "thumbnail.jpg",
-      "preview.html", "Abrir-previa.cmd", "README.md", "app.js", "shaders.js", "style.css",
+      "preview.html", "Abrir-previa.cmd", "README.md", "app.js", "shaders.js", "webgpu-engine.js", "style.css",
       "licenses/Hash-without-Sine-MIT.txt"
     ]
   },
