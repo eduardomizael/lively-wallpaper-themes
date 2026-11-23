@@ -543,20 +543,28 @@
         ctx.restore();
       }
 
-      // 2c. Estrelas da constelação: discretas no estado normal, mais destacadas no hover/arte
+      // 2c. Estrelas da constelação: discretas no estado normal, mais destacadas no hover e piscando levemente quando selecionada
       const highlight = Math.max(c.hoverAmount, c.artAlpha * 0.85);
+      const selected = c.artAlpha;
       for (let i = 0; i < c.projected.length; i++) {
         const s = c.projected[i];
         const rgb = hexToRgb(s.color);
         // Magnitude -> raio natural: sem grande destaque quando ocioso, cresce suavemente no hover
         const magNorm = Math.max(0, Math.min(1, (4.3 - s.mag) / 3.4));
         const baseR = 0.95 + magNorm * 1.15;
-        const radius = baseR * (1 + highlight * 0.55);
+
+        // Cintilação orgânica fora de fase quando a constelação está selecionada
+        const w1 = 0.5 + 0.5 * Math.sin(clockTime * (2.5 + (i % 5) * 0.42) + i * 2.13);
+        const w2 = 0.5 + 0.5 * Math.sin(clockTime * (1.3 + (i % 3) * 0.35) + i * 0.97);
+        const blink = (w1 * 0.65 + w2 * 0.35); // 0..1 suave
+        const blinkAmp = selected * (0.28 + 0.72 * blink); // 0.28..1.0 quando selecionada
+
+        const radius = baseR * (1 + highlight * 0.55) * (1 - selected * 0.08 + blinkAmp * 0.18);
         const tw = 0.88 + 0.12 * Math.sin(clockTime * (1.4 + i * 0.19) + i * 1.7);
         const baseAlpha = (0.58 + magNorm * 0.34) * tw;
-        const alpha = Math.min(1, baseAlpha + highlight * 0.32);
-        const haloBoost = 0.12 + highlight * (0.75 + magNorm * 0.55);
-        const diff = highlight * (s.hero ? 0.95 : magNorm * 0.48);
+        const alpha = Math.min(1, (baseAlpha + highlight * 0.32) * (1 - selected * 0.28 + blinkAmp * 0.34));
+        const haloBoost = (0.12 + highlight * (0.75 + magNorm * 0.55)) * (1 - selected * 0.25 + blinkAmp * 0.55);
+        const diff = highlight * (s.hero ? 0.95 : magNorm * 0.48) * (1 - selected * 0.35 + blinkAmp * 0.65);
 
         drawStar(s.sx + ox, s.sy + oy, radius, rgb, alpha, haloBoost, diff);
 
