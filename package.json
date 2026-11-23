@@ -1,0 +1,15 @@
+{
+  "name": "lively-wallpapers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Coleção de papéis de parede animados para Lively Wallpaper com build minificado em arquivo HTML único.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check-deps": "node scripts/build.mjs --check-deps"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "html-minifier-terser": "^7.2.0"
+  }
+}
+

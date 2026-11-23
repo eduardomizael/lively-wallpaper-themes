@@ -1,11 +1,48 @@
 ﻿[CmdletBinding()]
 param(
-    [string]$Biblioteca,
-    [string[]]$Temas,
-    [switch]$Atualizar
+    [string]$Library,
+    [Alias('Themes')]
+    [string[]]$Theme,
+    [switch]$Update,
+    [switch]$BuildOnly,
+    [string]$OutDir
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Assert-BuildDependencies([string]$ProjectRoot, [string]$BuildScript) {
+    $missing = @()
+
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $nodeCmd) {
+        $missing += 'Node.js (comando "node" não encontrado no PATH) -> instale em https://nodejs.org/'
+    }
+
+    $npmCmd = Get-Command npm -ErrorAction SilentlyContinue
+    if (-not $npmCmd) {
+        $missing += 'npm (comando "npm" não encontrado no PATH) -> instalado junto com o Node.js'
+    }
+
+    if (-not (Test-Path -LiteralPath $BuildScript -PathType Leaf)) {
+        $missing += "Script de build ausente: $BuildScript"
+    }
+
+    if ($missing.Count -gt 0) {
+        Write-Host ''
+        Write-Warning 'Não é possível executar o build porque há dependências ausentes:'
+        foreach ($item in $missing) {
+            Write-Host "  - $item" -ForegroundColor Yellow
+        }
+        Write-Host ''
+        throw 'Dependências obrigatórias ausentes.'
+    }
+
+    & node $BuildScript --check-deps
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "Execute 'npm install' na pasta '$ProjectRoot' e tente novamente."
+        throw 'Dependências Node do projeto não instaladas.'
+    }
+}
 
 function Resolve-WallpapersFolder([string]$Path) {
     if ([string]::IsNullOrWhiteSpace($Path)) { return }
@@ -50,51 +87,53 @@ function Find-WallpapersFolders([string]$LocalData) {
     }
 }
 
+$buildScript = Join-Path $PSScriptRoot 'scripts\build.mjs'
+$distRoot = if ([string]::IsNullOrWhiteSpace($OutDir)) {
+    Join-Path $PSScriptRoot 'dist'
+} else {
+    $OutDir
+}
+
+# 1. Valida dependências antes de qualquer ação
+Assert-BuildDependencies -ProjectRoot $PSScriptRoot -BuildScript $buildScript
+
+# 2. Carrega catálogo de temas
 [object[]]$catalog = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'catalogo.json') -Raw -Encoding UTF8 | ConvertFrom-Json)
-if ($Temas) {
-    if ($Temas.Count -eq 1 -and $Temas[0] -eq 'todos') {
+
+# 3. Modo interativo: escolher entre "Buildar e instalar" ou "Apenas buildar"
+$isInteractive = (-not $BuildOnly) -and (-not $Library) -and (-not $Theme) -and (-not $Update)
+if ($isInteractive) {
+    Write-Host ''
+    Write-Host 'O que deseja fazer?'
+    Write-Host '  1. Buildar (minificar) e instalar no Lively'
+    Write-Host '  2. Apenas buildar (gerar em dist\)'
+    Write-Host '  0. Sair'
+    do {
+        $actionChoice = (Read-Host 'Escolha uma opção [1, 2 ou 0]').Trim()
+        if ($actionChoice -eq '0') { return }
+        if ($actionChoice -eq '2') {
+            $BuildOnly = $true
+            break
+        }
+        if ($actionChoice -eq '1') {
+            break
+        }
+        Write-Warning 'Opção inválida. Digite 1, 2 ou 0.'
+    } while ($true)
+}
+
+# 4. Seleciona os temas
+if ($Theme) {
+    if ($Theme.Count -eq 1 -and ($Theme[0] -ieq 'all' -or $Theme[0] -ieq 'todos')) {
         $selected = $catalog
     } else {
-        $unknown = @($Temas | Where-Object { $_ -notin $catalog.id -and $_ -notin $catalog.destino })
+        $unknown = @($Theme | Where-Object { $_ -notin $catalog.id -and $_ -notin $catalog.destino })
         if ($unknown.Count) { throw "Tema(s) desconhecido(s): $($unknown -join ', ')." }
-        $selected = @($catalog | Where-Object { $_.id -in $Temas -or $_.destino -in $Temas })
+        $selected = @($catalog | Where-Object { $_.id -in $Theme -or $_.destino -in $Theme })
     }
-}
-
-if ($Biblioteca) {
-    $wallpapers = Resolve-WallpapersFolder $Biblioteca
-    if (-not $wallpapers) { throw "Pasta da biblioteca do Lively inválida: $Biblioteca." }
 } else {
-    $detected = @(Find-WallpapersFolders ([Environment]::GetFolderPath('LocalApplicationData')) | Select-Object -Unique)
-    if ($detected.Count -eq 1) {
-        $wallpapers = $detected[0]
-    } elseif ($detected.Count -gt 1) {
-        Write-Host 'Bibliotecas do Lively encontradas:'
-        for ($index = 0; $index -lt $detected.Count; $index++) {
-            Write-Host ("  {0}. {1}" -f ($index + 1), $detected[$index])
-        }
-        do {
-            $inputPath = Read-Host 'Digite o número da biblioteca, outro caminho ou 0 para sair'
-            if ($inputPath -eq '0') { return }
-            $number = 0
-            if ([int]::TryParse($inputPath, [ref]$number) -and $number -ge 1 -and $number -le $detected.Count) {
-                $wallpapers = $detected[$number - 1]
-            } else { $wallpapers = Resolve-WallpapersFolder $inputPath }
-            if (-not $wallpapers) { Write-Warning 'Escolha uma biblioteca existente.' }
-        } until ($wallpapers)
-    } else {
-        Write-Host 'Biblioteca não encontrada. Abra Lively > Configurações > Geral e verifique o diretório dos papéis de parede.'
-        do {
-            $inputPath = Read-Host 'Cole o caminho de Library ou wallpapers, ou digite 0 para sair'
-            if ($inputPath -eq '0') { return }
-            $wallpapers = Resolve-WallpapersFolder $inputPath
-            if (-not $wallpapers) { Write-Warning 'Pasta wallpapers não encontrada nesse caminho.' }
-        } until ($wallpapers)
-    }
-}
-
-Write-Host "Biblioteca: $wallpapers"
-if (-not $Temas) {
+    Write-Host ''
+    Write-Host 'Temas disponíveis:'
     for ($index = 0; $index -lt $catalog.Count; $index++) {
         $metadata = Get-Content -LiteralPath (Join-Path $PSScriptRoot "$($catalog[$index].id)/LivelyInfo.json") -Raw -Encoding UTF8 | ConvertFrom-Json
         Write-Host ("  {0}. {1}" -f ($index + 1), $metadata.Title)
@@ -102,7 +141,7 @@ if (-not $Temas) {
     do {
         $selection = (Read-Host 'Digite os números separados por vírgula, T para todos ou 0 para sair').Trim()
         if ($selection -eq '0') { return }
-        if ($selection -eq 'T') {
+        if ($selection -ieq 'T') {
             $selected = $catalog
         } else {
             $choices = @($selection -split '[,;\s]+' | Where-Object { $_ })
@@ -121,21 +160,80 @@ if (-not $Temas) {
     } until ($selected)
 }
 
+# 5. Executa o build minificado dos temas selecionados
+Write-Host ''
+$themeIds = @($selected | ForEach-Object { $_.id })
+& node $buildScript --out $distRoot @themeIds
+if ($LASTEXITCODE -ne 0) {
+    throw "O build falhou com código de saída $LASTEXITCODE."
+}
+
+if ($BuildOnly) {
+    Write-Host ''
+    Write-Host "Build concluído (sem instalação). Arquivos gerados em: $distRoot"
+    return
+}
+
+# 6. Resolve a biblioteca do Lively Wallpaper
+if ($Library) {
+    $wallpapers = Resolve-WallpapersFolder $Library
+    if (-not $wallpapers) { throw "Pasta da biblioteca do Lively inválida: $Library." }
+} else {
+    $detected = @(Find-WallpapersFolders ([Environment]::GetFolderPath('LocalApplicationData')) | Select-Object -Unique)
+    if ($detected.Count -eq 1) {
+        $wallpapers = $detected[0]
+    } elseif ($detected.Count -gt 1) {
+        Write-Host ''
+        Write-Host 'Bibliotecas do Lively encontradas:'
+        for ($index = 0; $index -lt $detected.Count; $index++) {
+            Write-Host ("  {0}. {1}" -f ($index + 1), $detected[$index])
+        }
+        do {
+            $inputPath = Read-Host 'Digite o número da biblioteca, outro caminho ou 0 para sair'
+            if ($inputPath -eq '0') { return }
+            $number = 0
+            if ([int]::TryParse($inputPath, [ref]$number) -and $number -ge 1 -and $number -le $detected.Count) {
+                $wallpapers = $detected[$number - 1]
+            } else { $wallpapers = Resolve-WallpapersFolder $inputPath }
+            if (-not $wallpapers) { Write-Warning 'Escolha uma biblioteca existente.' }
+        } until ($wallpapers)
+    } else {
+        Write-Host ''
+        Write-Host 'Biblioteca não encontrada. Abra Lively > Configurações > Geral e verifique o diretório dos papéis de parede.'
+        do {
+            $inputPath = Read-Host 'Cole o caminho de Library ou wallpapers, ou digite 0 para sair'
+            if ($inputPath -eq '0') { return }
+            $wallpapers = Resolve-WallpapersFolder $inputPath
+            if (-not $wallpapers) { Write-Warning 'Pasta wallpapers não encontrada nesse caminho.' }
+        } until ($wallpapers)
+    }
+}
+
+Write-Host ''
+Write-Host "Biblioteca: $wallpapers"
+
+# 7. Instala cada tema a partir do build gerado em dist/<id>
 $libraryRoot = Split-Path -Parent $wallpapers
 $installed = 0
 $failures = @()
-foreach ($theme in $selected) {
-    $source = Join-Path $PSScriptRoot $theme.id
-    $target = Join-Path $wallpapers $theme.destino
+foreach ($item in $selected) {
+    $source = Join-Path $distRoot $item.id
+    if (-not (Test-Path -LiteralPath $source -PathType Container)) {
+        $failures += $item.id
+        Write-Warning "Pasta de build não encontrada para $($item.id): $source"
+        continue
+    }
+
+    $target = Join-Path $wallpapers $item.destino
     $existing = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
     if ($existing) {
         if ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint -or -not $existing.PSIsContainer) {
-            $failures += $theme.id
+            $failures += $item.id
             Write-Warning "Destino incompatível: $target"
             continue
         }
-        if (-not $Atualizar) {
-            if ($Temas -or (Read-Host "$($theme.id) já existe. Atualizar com backup? [s/N]") -ne 's') {
+        if (-not $Update) {
+            if ($Theme -or (Read-Host "$($item.id) já existe. Atualizar com backup? [s/N]") -ne 's') {
                 Write-Host "Mantido: $target"
                 continue
             }
@@ -147,15 +245,9 @@ foreach ($theme in $selected) {
     $backup = $null
     try {
         $null = [IO.Directory]::CreateDirectory($stage)
-        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'LICENSE') -Destination $stage
-        foreach ($file in $theme.arquivos) {
-            $from = Join-Path $source $file
-            $to = Join-Path $stage $file
-            $null = [IO.Directory]::CreateDirectory((Split-Path -Parent $to))
-            Copy-Item -LiteralPath $from -Destination $to
-        }
+        Copy-Item -Path (Join-Path $source '*') -Destination $stage -Recurse -Force
         if ($existing) {
-            if ($theme.id -eq 'circuit-orbit') {
+            if ($item.id -eq 'circuit-orbit') {
                 foreach ($name in @('desktop-map.json', 'desktop-map.js')) {
                     $map = Join-Path $target "settings/$name"
                     if (Test-Path -LiteralPath $map -PathType Leaf) {
@@ -167,7 +259,7 @@ foreach ($theme in $selected) {
             }
             $backupFolder = Join-Path $libraryRoot 'BackupsTemas'
             $null = [IO.Directory]::CreateDirectory($backupFolder)
-            $backup = Join-Path $backupFolder "$($theme.destino)-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$operation"
+            $backup = Join-Path $backupFolder "$($item.destino)-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$operation"
             [IO.Directory]::Move($target, $backup)
         }
         try {
@@ -182,8 +274,8 @@ foreach ($theme in $selected) {
         Write-Host "Instalado: $target"
         if ($backup) { Write-Host "Backup: $backup" }
     } catch {
-        $failures += $theme.id
-        Write-Warning "Falha ao instalar $($theme.id): $($_.Exception.Message)"
+        $failures += $item.id
+        Write-Warning "Falha ao instalar $($item.id): $($_.Exception.Message)"
         if ($backup -and (Test-Path -LiteralPath $backup)) { Write-Warning "Backup disponível em $backup" }
     } finally {
         if (Test-Path -LiteralPath $stage) {
@@ -201,3 +293,4 @@ if ($installed) {
     Write-Host 'Abra Lively Wallpaper no menu Iniciar e selecione o tema na Biblioteca.'
 }
 if ($failures.Count) { throw "Instalação incompleta: $($failures -join ', ')." }
+

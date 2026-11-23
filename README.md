@@ -9,25 +9,26 @@ Quatro papéis de parede animados para o Lively Wallpaper no Windows. Cada tema 
 | <img src="lantern-sky-clima-e-lua/thumbnail.jpg" width="216" alt="Lanternas no céu"> | [Lantern Sky · Edição Clima e Lua](lantern-sky-clima-e-lua/README.md) | Adaptação de Lantern Sky, de Dre, com Lua, Sol e clima local. |
 | <img src="ori-energy-spheres/thumbnail.jpg" width="216" alt="Cinco esferas de energia"> | [Ori · Spirit Energy Spheres](ori-energy-spheres/README.md) | Cinco esferas procedurais com vórtices, coroas e plasma. |
 
-## Instalar
+## Build e instalação
 
-1. Instale o [Lively Wallpaper](https://www.rocksdanister.com/lively/) e abra-o ao menos uma vez para criar a biblioteca.
-2. Clone ou extraia o projeto inteiro e execute `Instalar-temas.cmd` com a sua conta do Windows.
-3. Confira o caminho exibido. O instalador procura a biblioteca da Microsoft Store e a da versão desktop, incluindo o caminho personalizado gravado nas configurações. Se precisar informar um caminho, consulte o diretório dos papéis de parede em **Configurações → Geral** no Lively e informe a pasta de dados, `Library` ou `wallpapers`.
-4. Escolha os números dos temas separados por vírgula, como `1,3`, ou digite `T` para instalar todos. Se um tema já existir, o instalador pergunta se você quer atualizá-lo com backup.
-5. Para recarregar a biblioteca, clique com o botão direito no ícone do Lively perto do relógio e escolha **Sair**. Abra **Lively Wallpaper** pelo menu Iniciar e selecione o tema. Se a cópia falhar porque um tema está em uso, saia do Lively e rode o instalador novamente.
+1. Instale o [Node.js](https://nodejs.org/) e execute `npm install` na raiz do projeto para instalar as dependências de build (`esbuild` e `html-minifier-terser`).
+2. Instale o [Lively Wallpaper](https://www.rocksdanister.com/lively/) e abra-o ao menos uma vez para criar a biblioteca.
+3. Execute `build-install.cmd` com a sua conta do Windows. O utilitário verifica as dependências, permite escolher entre **buildar e instalar no Lively** ou **apenas buildar** (gerando o `index.html` único minificado + metadados em `dist/`).
+4. Se escolher instalar, confira o caminho exibido da biblioteca do Lively e escolha os números dos temas separados por vírgula, como `1,3`, ou digite `T` para todos. Se um tema já existir, o instalador pergunta se você quer atualizá-lo com backup.
+5. Para recarregar a biblioteca, clique com o botão direito no ícone do Lively perto do relógio e escolha **Sair**. Abra **Lively Wallpaper** pelo menu Iniciar e selecione o tema. Se a cópia falhar porque um tema está em uso, saia do Lively e rode o script novamente.
 
 ### Pelo PowerShell
 
 Na raiz do projeto, use Windows PowerShell 5.1 ou PowerShell 7.
 
 ~~~powershell
-.\Instalar-temas.ps1
-.\Instalar-temas.ps1 -Biblioteca 'D:\Lively\Library' -Temas koi-pond,lantern-sky-clima-e-lua
-.\Instalar-temas.ps1 -Biblioteca 'D:\Lively\Library' -Temas todos -Atualizar
+.\build-install.ps1
+.\build-install.ps1 -BuildOnly -Theme all
+.\build-install.ps1 -Library 'D:\Lively\Library' -Theme koi-pond,lantern-sky-clima-e-lua
+.\build-install.ps1 -Library 'D:\Lively\Library' -Theme all -Update
 ~~~
 
-Com `-Biblioteca` e `-Temas`, a instalação roda sem perguntas. Use `-Atualizar` para substituir um tema existente. A pasta anterior é guardada em `Library\BackupsTemas` e o instalador exibe o caminho do backup.
+Com `-BuildOnly`, o script apenas gera os temas minificados em `dist/` sem instalar no Lively (também disponível via `npm run build` ou especificando `-OutDir`). Com `-Library` e `-Theme`, a instalação roda sem perguntas. Use `-Update` para substituir um tema existente. A pasta anterior é guardada em `Library\BackupsTemas` e o instalador exibe o caminho do backup.
 
 Para recuperar um backup, saia do Lively, mova a versão atual para fora de `wallpapers` e coloque o backup nessa pasta com o nome original do tema. Reabra o aplicativo.
 
