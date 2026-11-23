@@ -7,7 +7,7 @@ Quatro papéis de parede animados para o Lively Wallpaper no Windows. Cada tema 
 | <img src="circuit-orbit/thumbnail.jpg" width="216" alt="Marcadores luminosos"> | [Circuit Orbit](circuit-orbit/README.md) | Feixes entre os ícones do desktop, sete marcadores e efeitos de energia que reagem ao mouse. |
 | <img src="koi-pond/thumbnail.jpg" width="216" alt="Carpas em um lago"> | [Koi Pond](koi-pond/README.md) | Cinco variedades de carpa 3D reagem ao cursor e disputam petiscos. |
 | <img src="lantern-sky-clima-e-lua/thumbnail.jpg" width="216" alt="Lanternas no céu"> | [Lantern Sky · Edição Clima e Lua](lantern-sky-clima-e-lua/README.md) | Adaptação de Lantern Sky, de Dre, com Lua, Sol e clima local. |
-| <img src="ori-energy-spheres/thumbnail.jpg" width="216" alt="Cinco esferas de energia"> | [Ori · Spirit Energy Spheres](ori-energy-spheres/README.md) | Cinco esferas procedurais com vórtices, coroas e plasma. |
+| <img src="ori-energy-spheres/thumbnail.jpg" width="216" alt="Cinco esferas de energia"> | [Energy Spheres](ori-energy-spheres/README.md) | Cinco esferas procedurais com vórtices, coroas e plasma. |
 
 ## Build e instalação
 
@@ -56,6 +56,6 @@ As contribuições originais de **Eduardo Mizael Clemente** estão sob a [licen�
 | [Circuit Orbit](circuit-orbit/README.md#créditos) | Fluidos de Pavel Dobryakov, a partir da adaptação de rocksdanister para o Lively. Marcadores derivados de Ori · Spirit Energy Spheres, com hash de David Hoskins. |
 | [Koi Pond](koi-pond/README.md#créditos) | Three.js e lil-gui. Ruído celular e cáusticas com referências de Inigo Quilez e *The Book of Shaders*. |
 | [Lantern Sky · Edição Clima e Lua](lantern-sky-clima-e-lua/README.md#créditos-e-licença) | Tema original de **Dre**, com adaptações de Eduardo Mizael Clemente. SunCalc de Vladimir Agafonkin e dados de Open-Meteo, WeatherAPI e RainViewer. |
-| [Ori · Spirit Energy Spheres](ori-energy-spheres/README.md#créditos) | Referência visual de *Ori and the Blind Forest*, desenvolvido pela Moon Studios e publicado pela Microsoft Studios. Hash de David Hoskins. |
+| [Energy Spheres](ori-energy-spheres/README.md#créditos) | Referência visual de *Ori and the Blind Forest*, desenvolvido pela Moon Studios e publicado pela Microsoft Studios. Hash de David Hoskins. |
 
 Os componentes de terceiros mantêm suas próprias licenças. O pacote original de Lantern Sky identifica Dre como autor, com o campo de licença em branco. A licença MIT desta coleção cobre as contribuições de Eduardo à edição, e a redistribuição do material original depende das condições de Dre.

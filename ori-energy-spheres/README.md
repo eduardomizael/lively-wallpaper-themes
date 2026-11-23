@@ -1,4 +1,4 @@
-# Ori · Spirit Energy Spheres
+# Energy Spheres
 
 ![Vitrine dos cinco arquétipos de energia](thumbnail.jpg)
 
