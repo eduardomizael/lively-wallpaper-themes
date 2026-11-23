@@ -60,7 +60,7 @@
     "destino": "zodiac-sky",
     "arquivos": [
       "LivelyInfo.json", "LivelyProperties.json", "index.html", "style.css",
-      "app.js", "constellations/scorpius.js",
+      "app.js", "constellations/scorpius.js", "assets/scorpius.png",
       "preview.html", "Abrir-previa.cmd", "README.md"
     ]
   }

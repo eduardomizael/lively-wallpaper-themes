@@ -14,7 +14,7 @@
     twinkleStrength: 65,    // 0..100 (%) cintilação
     hoverRadius: 100,       // 50..180 (%) raio de detecção ao redor da constelação
     lineBrightness: 80,     // 20..150 (%) brilho das linhas ao passar o mouse
-    artOpacity: 72,         // 20..100 (%) opacidade da ilustração etérea ao clicar
+    artOpacity: 58,         // 20..100 (%) opacidade da ilustração etérea ao clicar
     showLabels: true,       // exibir nome da constelação e estrelas principais
     artAutoFade: 0,         // 0 = alterna no clique (fixo); >0 = segundos até esmaecer
     milkyWay: 45,           // 0..100 (%) intensidade da Via Láctea sutil
@@ -127,8 +127,10 @@
     constellations.length = 0;
     const reg = window.ZodiacRegistry || [];
     for (const def of reg) {
-      constellations.push({
+      const entry = {
         def,
+        artImg: null,
+        artReady: false,
         artCanvas: document.createElement('canvas'),
         artBounds: { x: 0, y: 0, w: 0, h: 0 },
         projected: [],
@@ -142,7 +144,15 @@
         artAlpha: 0,
         artTimer: 0,
         revealPulse: 0
-      });
+      };
+      if (def.artImage) {
+        const img = new Image();
+        img.decoding = 'async';
+        img.onload = () => { entry.artReady = true; };
+        img.src = def.artImage;
+        entry.artImg = img;
+      }
+      constellations.push(entry);
     }
   }
 
@@ -177,19 +187,27 @@
       const bh = maxY - minY;
       c.hitRadius = Math.max(bw, bh) * 0.62;
 
-      // Pré-renderiza a ilustração etérea em offscreen canvas para alpha uniforme sem costuras
-      const pad = scale * 0.42;
-      const ox = Math.floor(minX - pad);
-      const oy = Math.floor(minY - pad);
-      const ow = Math.max(16, Math.ceil(bw + pad * 2));
-      const oh = Math.max(16, Math.ceil(bh + pad * 2));
-      c.artBounds = { x: ox, y: oy, w: ow, h: oh };
-      c.artCanvas.width = Math.max(1, Math.round(ow * dpr));
-      c.artCanvas.height = Math.max(1, Math.round(oh * dpr));
-      const ag = c.artCanvas.getContext('2d');
-      ag.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ag.clearRect(0, 0, ow, oh);
-      d.renderArt(ag, (nx, ny) => [cx + nx * scale - ox, cy + ny * scale - oy], scale);
+      if (d.artRect) {
+        c.artBounds = {
+          x: cx + d.artRect.x * scale,
+          y: cy + d.artRect.y * scale,
+          w: d.artRect.w * scale,
+          h: d.artRect.h * scale
+        };
+      } else if (typeof d.renderArt === 'function') {
+        const pad = scale * 0.42;
+        const ox = Math.floor(minX - pad);
+        const oy = Math.floor(minY - pad);
+        const ow = Math.max(16, Math.ceil(bw + pad * 2));
+        const oh = Math.max(16, Math.ceil(bh + pad * 2));
+        c.artBounds = { x: ox, y: oy, w: ow, h: oh };
+        c.artCanvas.width = Math.max(1, Math.round(ow * dpr));
+        c.artCanvas.height = Math.max(1, Math.round(oh * dpr));
+        const ag = c.artCanvas.getContext('2d');
+        ag.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ag.clearRect(0, 0, ow, oh);
+        d.renderArt(ag, (nx, ny) => [cx + nx * scale - ox, cy + ny * scale - oy], scale);
+      }
     }
   }
 
@@ -475,16 +493,21 @@
 
       // 2a. Ilustração etérea (aparece ao clicar)
       if (c.artAlpha > 0.005) {
-        ctx.save();
-        ctx.globalAlpha = c.artAlpha * artMaxOpacity;
-        ctx.drawImage(
-          c.artCanvas,
-          c.artBounds.x + ox,
-          c.artBounds.y + oy,
-          c.artBounds.w,
-          c.artBounds.h
-        );
-        ctx.restore();
+        const artSrc = c.artImg ? (c.artReady ? c.artImg : null) : c.artCanvas;
+        if (artSrc) {
+          ctx.save();
+          ctx.globalAlpha = c.artAlpha * artMaxOpacity;
+          ctx.shadowColor = 'rgba(138, 166, 232, 0.28)';
+          ctx.shadowBlur = Math.max(6, c.scale * 0.025);
+          ctx.drawImage(
+            artSrc,
+            c.artBounds.x + ox,
+            c.artBounds.y + oy,
+            c.artBounds.w,
+            c.artBounds.h
+          );
+          ctx.restore();
+        }
       }
 
       // Onda etérea muito sutil no instante da revelação

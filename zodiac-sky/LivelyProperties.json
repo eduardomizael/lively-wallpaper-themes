@@ -53,7 +53,7 @@
     "min": 20,
     "max": 100,
     "step": 5,
-    "value": 72
+    "value": 58
   },
   "artAutoFade": {
     "text": "Auto-esmaecer Desenho (segundos, 0 = fixo)",
