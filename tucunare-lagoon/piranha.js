@@ -240,14 +240,26 @@
 
   const SWIM_VERTEX = /* glsl */ `
     uniform float uTime;
+    uniform float uSwimPhase;
+    uniform float uTailAmp;
+    uniform float uSpineCurve;
     varying vec3 vLocal;
     varying vec3 vWorld;
     varying vec3 vNormal;
     varying vec2 vTex;
 
+    // Nado subcarangiforme realista de caracídeo (corpo alto):
+    // onda contínua percorrendo o corpo da cabeça à cauda (~0.75 ciclo),
+    // leve contrabalanço no focinho e flexão em arco C do corpo inteiro nas curvas.
     float sway(float z) {
-      float tail = 1.0 - smoothstep(-1.93, 0.37, z);
-      return sin(uTime * 3.45 + z * 5.0) * tail * tail * 0.105;
+      float s = clamp((1.36 - z) / 3.49, 0.0, 1.0);
+      float bodyWave = sin(uSwimPhase - s * 4.45);
+      float envelope = 0.055 + 0.945 * pow(max(0.0, s - 0.06) / 0.94, 1.48);
+      float headRecoil = sin(uSwimPhase + 1.15) * 0.14 * (1.0 - smoothstep(0.0, 0.32, s));
+      float swim = (bodyWave * envelope + headRecoil) * uTailAmp;
+      float ds = s - 0.28;
+      float bend = uSpineCurve * (ds * ds) * 1.85;
+      return swim + bend;
     }
 
     void main() {
@@ -255,8 +267,11 @@
       vLocal = position;
       vec3 p = position;
       p.x += sway(p.z);
-      vec3 n = normalize(vec3(normal.x, normal.y,
-        normal.z - normal.x * (sway(p.z + 0.025) - sway(p.z - 0.025)) * 20.0));
+      float slope = (sway(p.z + 0.04) - sway(p.z - 0.04)) / 0.08;
+      float angle = atan(slope);
+      float c = cos(angle);
+      float sn = sin(angle);
+      vec3 n = normalize(vec3(normal.x * c + normal.z * sn, normal.y, -normal.x * sn + normal.z * c));
       vec4 world = modelMatrix * vec4(p, 1.0);
       vWorld = world.xyz;
       vNormal = normalize(mat3(modelMatrix) * n);
@@ -462,13 +477,45 @@
     }
   `;
 
+  let sharedGeos = null;
+  function getSharedGeometries() {
+    if (sharedGeos) return sharedGeos;
+    const [upperBody, lowerBody] = cheekGeometries();
+    const [roof, floor] = mouthGeometries();
+    sharedGeos = {
+      upperBody,
+      lowerBody,
+      roof,
+      floor,
+      teeth: teethGeometry(),
+      tail: tailGeometry(),
+      dorsal: medianFin(0.205, -0.500, true, 0.31, 0.28, 0.93, 0.58),
+      adipose: medianFin(-0.655, -0.965, true, 0.137, 0.46, 0.53, 0.59),
+      anal: medianFin(-0.294, -1.054, false, 0.333, 0.42, 0.93, 0.75),
+      pectL: pairedFin(1, false),
+      pectR: pairedFin(-1, false),
+      pelvL: pairedFin(1, true),
+      pelvR: pairedFin(-1, true),
+      eyeL: new THREE.SphereGeometry(0.094, 24, 18).scale(0.69, 1, 1).translate(0.194, EYE_Y, EYE_Z),
+      eyeR: new THREE.SphereGeometry(0.094, 24, 18).scale(0.69, 1, 1).translate(-0.194, EYE_Y, EYE_Z)
+    };
+    return sharedGeos;
+  }
+
   function create(causticsGLSL, sceneUniforms) {
+    const geos = getSharedGeometries();
     const fish = new THREE.Group();
     fish.name = 'Piranha-vermelha';
+    const baseUniforms = {
+      uSwimPhase: { value: 0 },
+      uTailAmp: { value: 0.105 },
+      uSpineCurve: { value: 0.0 },
+      ...sceneUniforms
+    };
 
     function mesh(name, geometry, fragment, uniforms = {}, membrane = false) {
       const part = new THREE.Mesh(geometry, new THREE.ShaderMaterial({
-        uniforms: { ...sceneUniforms, ...uniforms },
+        uniforms: { ...baseUniforms, ...uniforms },
         vertexShader: SWIM_VERTEX,
         fragmentShader: causticsGLSL + WATER_LIGHT + fragment,
         side: membrane ? THREE.DoubleSide : THREE.FrontSide,
@@ -490,27 +537,21 @@
       }, true);
     }
 
-    const [upperBody, lowerBody] = cheekGeometries();
-    const [roof, floor] = mouthGeometries();
-    mesh('Corpo e maxila', upperBody, SKIN);
-    mesh('Corpo e mandíbula', lowerBody, SKIN);
-    mesh('Céu da boca', roof, PALATE);
-    mesh('Assoalho da boca', floor, PALATE);
-    mesh('Dentes', teethGeometry(), TEETH);
-    fin('Cauda bifurcada', tailGeometry(), [0.39, 0.44, 0.42], [0.45, 0.52, 0.49], 28, true, 1);
-    fin('Dorsal', medianFin(0.205, -0.500, true, 0.31, 0.28, 0.93, 0.58),
-      [0.33, 0.38, 0.35], [0.29, 0.37, 0.39], 16, false, 0.54);
-    fin('Adiposa', medianFin(-0.655, -0.965, true, 0.137, 0.46, 0.53, 0.59),
-      [0.26, 0.33, 0.32], [0.47, 0.56, 0.51], 4, false, 0.14);
-    fin('Anal', medianFin(-0.294, -1.054, false, 0.333, 0.42, 0.93, 0.75),
-      [0.63, 0.30, 0.159], [0.32, 0.325, 0.285], 24, false, 0.58);
+    mesh('Corpo e maxila', geos.upperBody, SKIN);
+    mesh('Corpo e mandíbula', geos.lowerBody, SKIN);
+    mesh('Céu da boca', geos.roof, PALATE);
+    mesh('Assoalho da boca', geos.floor, PALATE);
+    mesh('Dentes', geos.teeth, TEETH);
+    fin('Cauda bifurcada', geos.tail, [0.39, 0.44, 0.42], [0.45, 0.52, 0.49], 28, true, 1);
+    fin('Dorsal', geos.dorsal, [0.33, 0.38, 0.35], [0.29, 0.37, 0.39], 16, false, 0.54);
+    fin('Adiposa', geos.adipose, [0.26, 0.33, 0.32], [0.47, 0.56, 0.51], 4, false, 0.14);
+    fin('Anal', geos.anal, [0.63, 0.30, 0.159], [0.32, 0.325, 0.285], 24, false, 0.58);
 
     for (const side of [-1, 1]) {
-      fin('Peitoral', pairedFin(side, false), [0.51, 0.303, 0.164], [0.50, 0.385, 0.263], 13, true);
-      fin('Pélvica', pairedFin(side, true), [0.73, 0.33, 0.166], [0.56, 0.40, 0.285], 9, true);
+      fin('Peitoral', side > 0 ? geos.pectL : geos.pectR, [0.51, 0.303, 0.164], [0.50, 0.385, 0.263], 13, true);
+      fin('Pélvica', side > 0 ? geos.pelvL : geos.pelvR, [0.73, 0.33, 0.166], [0.56, 0.40, 0.285], 9, true);
       const center = new THREE.Vector3(side * 0.194, EYE_Y, EYE_Z);
-      const eye = new THREE.SphereGeometry(0.094, 24, 18).scale(0.69, 1, 1).translate(center.x, center.y, center.z);
-      mesh('Olho', eye, EYE, { uSide: { value: side }, uEyeCenter: { value: center } });
+      mesh('Olho', side > 0 ? geos.eyeL : geos.eyeR, EYE, { uSide: { value: side }, uEyeCenter: { value: center } });
     }
 
     return fish;

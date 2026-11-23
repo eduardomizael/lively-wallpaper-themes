@@ -240,7 +240,8 @@
       uTime: { value: 0 },
       uCausticsIntensity: { value: params.causticsIntensity },
       uFishPos: { value: new THREE.Vector3(0, 0, 0) },
-      uFishPos2: { value: new THREE.Vector3(99, 0, 99) }
+      uFishPos2: { value: new THREE.Vector3(99, 0, 99) },
+      uFishPos3: { value: new THREE.Vector3(99, 0, 99) }
     };
 
     function createAlgaeField() {
@@ -250,23 +251,23 @@
       const paramsAttr = []; // (height, phase, tint)
       const indices = [];
 
-      // Touceiras orgânicas distribuídas ao fundo e laterais, mantendo o centro livre para o tucunaré
+      // Touceiras orgânicas distribuídas ao fundo e laterais, deixando o lago profundo livre para os 3 peixes
       const clusters = [
-        { x: -10.5, z: -5.8, count: 16, hMin: 1.8, hMax: 3.4 },
-        { x: -8.2,  z: -6.4, count: 18, hMin: 2.0, hMax: 3.8 },
-        { x: -5.4,  z: -6.9, count: 15, hMin: 1.7, hMax: 3.3 },
-        { x: -2.6,  z: -7.4, count: 14, hMin: 1.5, hMax: 2.9 },
-        { x:  0.8,  z: -7.6, count: 13, hMin: 1.6, hMax: 3.0 },
-        { x:  4.2,  z: -7.1, count: 16, hMin: 1.9, hMax: 3.6 },
-        { x:  7.4,  z: -6.2, count: 18, hMin: 2.0, hMax: 3.9 },
-        { x: 10.4,  z: -5.4, count: 15, hMin: 1.8, hMax: 3.4 },
+        { x: -12.5, z: -8.2, count: 16, hMin: 1.8, hMax: 3.4 },
+        { x: -9.6,  z: -8.8, count: 18, hMin: 2.0, hMax: 3.8 },
+        { x: -6.2,  z: -9.3, count: 15, hMin: 1.7, hMax: 3.3 },
+        { x: -2.8,  z: -9.6, count: 14, hMin: 1.5, hMax: 2.9 },
+        { x:  0.8,  z: -9.8, count: 13, hMin: 1.6, hMax: 3.0 },
+        { x:  4.6,  z: -9.4, count: 16, hMin: 1.9, hMax: 3.6 },
+        { x:  8.4,  z: -8.6, count: 18, hMin: 2.0, hMax: 3.9 },
+        { x: 12.2,  z: -7.8, count: 15, hMin: 1.8, hMax: 3.4 },
         // Touceiras menores nas bordas intermediárias para paralaxe isométrica
-        { x: -9.8,  z: -2.2, count: 10, hMin: 1.1, hMax: 2.1 },
-        { x: -8.6,  z:  1.4, count: 9,  hMin: 0.9, hMax: 1.7 },
-        { x:  9.6,  z: -2.0, count: 10, hMin: 1.2, hMax: 2.2 },
-        { x:  8.5,  z:  1.6, count: 9,  hMin: 0.9, hMax: 1.7 },
-        { x: -4.2,  z: -4.5, count: 8,  hMin: 1.0, hMax: 1.9 },
-        { x:  4.8,  z: -4.6, count: 9,  hMin: 1.1, hMax: 2.0 }
+        { x: -10.8, z: -3.2, count: 10, hMin: 1.1, hMax: 2.1 },
+        { x: -9.2,  z:  2.2, count: 9,  hMin: 0.9, hMax: 1.7 },
+        { x: 10.6,  z: -3.0, count: 10, hMin: 1.2, hMax: 2.2 },
+        { x:  9.1,  z:  2.4, count: 9,  hMin: 0.9, hMax: 1.7 },
+        { x: -5.2,  z: -6.8, count: 8,  hMin: 1.0, hMax: 1.9 },
+        { x:  5.6,  z: -6.9, count: 9,  hMin: 1.1, hMax: 2.0 }
       ];
 
       let vertOffset = 0;
@@ -353,6 +354,7 @@
           uniform float uTime;
           uniform vec3 uFishPos;
           uniform vec3 uFishPos2;
+          uniform vec3 uFishPos3;
 
           varying vec2 vUv;
           varying vec3 vWorldPos;
@@ -376,18 +378,24 @@
             // Compensa levemente a altura ao inclinar para manter o comprimento natural da folha
             p.y -= abs(swayMain) * bend * 0.16;
 
-            // Leve afastamento na esteira quando qualquer tucunaré passa perto
+            // Leve afastamento na esteira quando qualquer peixe passa perto
             vec2 toBlade = p.xz - uFishPos.xz;
             float fDist = length(toBlade);
-            if (fDist < 2.8 && fDist > 0.001) {
-              float push = (1.0 - fDist / 2.8) * 0.35 * v * v;
+            if (fDist < 2.6 && fDist > 0.001) {
+              float push = (1.0 - fDist / 2.6) * 0.32 * v * v;
               p.xz += (toBlade / fDist) * push;
             }
             vec2 toBlade2 = p.xz - uFishPos2.xz;
             float fDist2 = length(toBlade2);
-            if (fDist2 < 2.8 && fDist2 > 0.001) {
-              float push2 = (1.0 - fDist2 / 2.8) * 0.35 * v * v;
+            if (fDist2 < 2.6 && fDist2 > 0.001) {
+              float push2 = (1.0 - fDist2 / 2.6) * 0.32 * v * v;
               p.xz += (toBlade2 / fDist2) * push2;
+            }
+            vec2 toBlade3 = p.xz - uFishPos3.xz;
+            float fDist3 = length(toBlade3);
+            if (fDist3 < 1.9 && fDist3 > 0.001) {
+              float push3 = (1.0 - fDist3 / 1.9) * 0.22 * v * v;
+              p.xz += (toBlade3 / fDist3) * push3;
             }
 
             vec4 wp = modelMatrix * vec4(p, 1.0);

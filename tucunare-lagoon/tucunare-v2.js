@@ -1158,7 +1158,7 @@
             vec2 d = (vShadowUv - vec2(0.5, 0.5)) * 2.0;
             float taper = mix(1.0, 1.8, smoothstep(0.45, 1.0, vShadowUv.y));
             float dist = length(vec2(d.x * taper, d.y));
-            float soft = exp(-dist * dist * 3.0) * smoothstep(1.0, 0.35, dist);
+            float soft = exp(-dist * dist * 3.0) * (1.0 - smoothstep(0.35, 1.0, dist));
             gl_FragColor = vec4(0.012, 0.058, 0.068, uShadowOpacity * soft);
           }
         `

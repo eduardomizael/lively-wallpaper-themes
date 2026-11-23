@@ -32,12 +32,12 @@
     "value": 100
   },
   "fishScale": {
-    "text": "Tamanho do Tucunaré (%)",
+    "text": "Tamanho dos Peixes (%)",
     "type": "slider",
-    "min": 60,
-    "max": 160,
+    "min": 40,
+    "max": 140,
     "step": 5,
-    "value": 100
+    "value": 75
   },
   "showAlgae": {
     "text": "Exibir algas no fundo",
