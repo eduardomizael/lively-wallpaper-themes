@@ -1,0 +1,30 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: #04051a; }
+#c { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#diag { position: fixed; top: 14px; right: 14px; z-index: 50; display: none; pointer-events: none;
+        font: 12px/1.5 Consolas, Menlo, monospace; color: #e8e6ff; background: rgba(8, 8, 24, .72);
+        border: 1px solid rgba(255, 255, 255, .15); border-radius: 6px; padding: 8px 12px; white-space: pre; }
+
+#weatherPanel { display:none;position:fixed;right:16px;bottom:calc(80px + env(safe-area-inset-bottom,0px));z-index:40;
+  width:200px;height:32px;max-width:calc(100vw - 32px);overflow:hidden;border-radius:7px;
+  color:#eef4ff;font:12px/1.6 "Segoe UI",sans-serif;background:rgba(5,12,28,.58);
+  box-shadow:0 0 0 1px #ffffff08;backdrop-filter:blur(10px);
+  transition:width 420ms cubic-bezier(.22,1,.36,1),height 420ms cubic-bezier(.22,1,.36,1),
+    background 320ms ease,border-radius 420ms ease,box-shadow 420ms ease; }
+#weatherPanel.is-expanded { background:rgba(5,12,28,.88);border-radius:11px;box-shadow:0 12px 36px #0005,0 0 0 1px #ffffff18; }
+#weatherSummary { position:absolute;right:0;bottom:0;display:block;width:100%;height:var(--summary-height,32px);
+  box-sizing:border-box;border:0;padding:6px 10px;cursor:pointer;background:transparent;
+  color:inherit;font:inherit;text-align:right;white-space:nowrap;user-select:none; }
+#weatherSummaryText { display:block;overflow:hidden;text-overflow:ellipsis; }
+#weatherSummary:hover { background:#ffffff06; }
+#weatherSummary:focus-visible { outline:2px solid #b9dcff;outline-offset:-3px;border-radius:7px; }
+#weatherDetails { position:absolute;right:0;bottom:var(--summary-height,32px);width:var(--expanded-width,488px);
+  box-sizing:border-box;padding:12px 14px;overflow-y:auto;border-bottom:1px solid #ffffff12;
+  opacity:0;transform:translateY(12px);visibility:hidden;pointer-events:none;
+  transition:opacity 180ms ease,transform 360ms cubic-bezier(.22,1,.36,1),visibility 0s linear 420ms; }
+#weatherPanel.is-expanded #weatherDetails { opacity:1;transform:translateY(0);visibility:visible;pointer-events:auto;
+  transition:opacity 280ms ease 90ms,transform 420ms cubic-bezier(.22,1,.36,1) 40ms,visibility 0s; }
+#weatherStatus { white-space:pre-line;overflow-wrap:anywhere; }
+#weatherCredits { margin-top:8px;font-size:10px; }
+#weatherCredits a { color:#b9dcff; }
+#weatherPanel.no-motion,#weatherPanel.no-motion #weatherDetails { transition:none!important; }
+@media(prefers-reduced-motion:reduce) { #weatherPanel,#weatherDetails,#weatherPanel.is-expanded #weatherDetails { transition:none;transform:none; } }

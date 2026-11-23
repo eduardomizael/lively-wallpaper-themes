@@ -1,0 +1,43 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #06252c;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#lagoon-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+.lil-gui.root {
+  --background-color: rgba(5, 28, 34, 0.80);
+  --text-color: #dff4f0;
+  --title-background-color: rgba(10, 48, 56, 0.88);
+  --title-text-color: #effbf8;
+  --widget-color: rgba(20, 82, 92, 0.65);
+  --hover-color: rgba(32, 114, 124, 0.82);
+  --focus-color: rgba(46, 146, 152, 0.92);
+  --number-color: #9be8b8;
+  --string-color: #f4be5e;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(130, 224, 205, 0.20);
+  border-radius: 6px;
+  top: 12px !important;
+  right: 12px !important;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+.lil-gui.hidden-gui {
+  display: none !important;
+}
