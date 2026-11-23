@@ -59,6 +59,8 @@ const {
   spawnRipple,
   pondBottomUniforms,
   waterSurfaceUniforms,
+  waterSurface,
+  waterScene,
   moteUniforms
 } = window.KoiEnvironment.createEnvironment({
   scene,
@@ -886,8 +888,18 @@ window.addEventListener('keydown', (e) => {
 initGui();
 
 // =========================================================================
-// 12. RESIZE E LOOP PRINCIPAL A 60 FPS
+// 12. RESIZE, REFRAÇÃO DE SUPERFÍCIE E LOOP PRINCIPAL A 60 FPS
 // =========================================================================
+const rtSize = new THREE.Vector2();
+renderer.getDrawingBufferSize(rtSize);
+const refractionRT = new THREE.WebGLRenderTarget(
+  Math.max(1, rtSize.x),
+  Math.max(1, rtSize.y),
+  { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, samples: 4 }
+);
+waterSurfaceUniforms.uSceneTex.value = refractionRT.texture;
+waterSurfaceUniforms.uResolution.value.set(Math.max(1, rtSize.x), Math.max(1, rtSize.y));
+
 function onResize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -895,18 +907,50 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.getDrawingBufferSize(rtSize);
+  refractionRT.setSize(Math.max(1, rtSize.x), Math.max(1, rtSize.y));
   updateBounds();
   pondBottomUniforms.uHalfSize.value.set(worldBounds.halfW, worldBounds.halfH);
   waterSurfaceUniforms.uHalfSize.value.set(worldBounds.halfW, worldBounds.halfH);
+  waterSurfaceUniforms.uResolution.value.set(Math.max(1, rtSize.x), Math.max(1, rtSize.y));
   moteUniforms.uPixelRatio.value = renderer.getPixelRatio();
 }
 window.addEventListener('resize', onResize);
 
 let lastNow = performance.now();
 let clockTime = 0;
+let livelyPaused = false;
+let hiddenPaused = Boolean(document.hidden);
+let paused = livelyPaused || hiddenPaused;
+let rafId = 0;
+
+function syncPaused() {
+  const nextPaused = livelyPaused || hiddenPaused;
+  if (nextPaused === paused) return;
+  paused = nextPaused;
+  if (paused) {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+  } else {
+    lastNow = performance.now();
+    if (!rafId) rafId = requestAnimationFrame(animate);
+  }
+}
+
+window.livelyWallpaperPlaybackChanged = function (data) {
+  let parsed = data;
+  try { if (typeof data === 'string') parsed = JSON.parse(data); } catch { parsed = null; }
+  livelyPaused = Boolean(parsed && parsed.IsPaused);
+  syncPaused();
+};
+document.addEventListener('visibilitychange', () => {
+  hiddenPaused = Boolean(document.hidden);
+  syncPaused();
+});
 
 function animate(now) {
-  requestAnimationFrame(animate);
+  rafId = 0;
+  if (paused) return;
+  rafId = requestAnimationFrame(animate);
   const dt = Math.min((now - lastNow) * 0.001, 0.05);
   lastNow = now;
   clockTime += dt;
@@ -923,8 +967,15 @@ function animate(now) {
     updateSingleFish(fishList[i], dt);
   }
 
+  // Passe 1: renderiza fundo + carpas para o render target de refração (com MSAA 4x)
+  renderer.setRenderTarget(refractionRT);
   renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+
+  // Passe 2: renderiza apenas o plano de superfície refratado (sem re-renderizar a cena toda)
+  waterSurface.visible = true;
+  renderer.render(waterScene, camera);
 }
 
-requestAnimationFrame(animate);
+rafId = requestAnimationFrame(animate);
 })();

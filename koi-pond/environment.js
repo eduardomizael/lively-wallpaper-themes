@@ -156,19 +156,22 @@
     pondBottom.position.y = -3.4;
     scene.add(pondBottom);
 
-    // 3.2 Plano de Água Superior com Cáusticas de Superfície e Ripples (y = 1.8)
+    // 3.2 Plano de Água Superior com Refração Real, Cáusticas de Superfície e Ripples (y = 1.8)
     const waterSurfaceUniforms = {
       uTime: { value: 0 },
       uCausticsIntensity: { value: params.causticsIntensity },
       uHalfSize: { value: new THREE.Vector2(worldBounds.halfW, worldBounds.halfH) },
-      uRipples: { value: rippleData }
+      uRipples: { value: rippleData },
+      uSceneTex: { value: null },
+      uResolution: { value: new THREE.Vector2(window.innerWidth * renderer.getPixelRatio(), window.innerHeight * renderer.getPixelRatio()) },
+      uUseRefraction: { value: 1.0 }
     };
 
     const waterSurfaceMat = new THREE.ShaderMaterial({
       uniforms: waterSurfaceUniforms,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       vertexShader: /* glsl */ `
         varying vec2 vWorldXZ;
         void main() {
@@ -182,6 +185,9 @@
         uniform float uCausticsIntensity;
         uniform vec2 uHalfSize;
         uniform vec4 uRipples[22];
+        uniform sampler2D uSceneTex;
+        uniform vec2 uResolution;
+        uniform float uUseRefraction;
         varying vec2 vWorldXZ;
 
         ${CAUSTICS_GLSL}
@@ -194,13 +200,34 @@
           float c = layeredCaustics(vWorldXZ * 1.12 + vec2(2.3, -1.9), uTime * 1.12);
           float shimmer = pow(c, 1.35) * 0.20 * uCausticsIntensity * centerMask;
 
+          float eps = 0.14;
           float rip = rippleField(vWorldXZ, uTime, uRipples);
+          float ripX = rippleField(vWorldXZ + vec2(eps, 0.0), uTime, uRipples) - rip;
+          float ripZ = rippleField(vWorldXZ + vec2(0.0, eps), uTime, uRipples) - rip;
           float ripGlow = rip * 0.30;
 
-          vec3 col = vec3(0.42, 0.86, 0.96) * shimmer + vec3(0.58, 0.93, 1.0) * ripGlow;
-          float alpha = clamp(shimmer * 1.15 + ripGlow, 0.0, 0.68);
+          vec3 surfaceCol = vec3(0.42, 0.86, 0.96) * shimmer + vec3(0.58, 0.93, 1.0) * ripGlow;
 
-          gl_FragColor = vec4(col, alpha);
+          if (uUseRefraction > 0.5) {
+            vec2 screenUv = gl_FragCoord.xy / max(uResolution, vec2(1.0));
+            vec2 ambientWave = vec2(
+              sin(vWorldXZ.y * 0.65 + uTime * 0.9),
+              cos(vWorldXZ.x * 0.60 - uTime * 0.8)
+            ) * 0.0018;
+            vec2 refractOffset = vec2(ripX, -ripZ) * 0.032 + ambientWave;
+            vec2 uvR = clamp(screenUv + refractOffset * 1.12, vec2(0.002), vec2(0.998));
+            vec2 uvG = clamp(screenUv + refractOffset, vec2(0.002), vec2(0.998));
+            vec2 uvB = clamp(screenUv + refractOffset * 0.88, vec2(0.002), vec2(0.998));
+            vec3 refracted = vec3(
+              texture2D(uSceneTex, uvR).r,
+              texture2D(uSceneTex, uvG).g,
+              texture2D(uSceneTex, uvB).b
+            );
+            gl_FragColor = vec4(refracted + surfaceCol, 1.0);
+          } else {
+            float alpha = clamp(shimmer * 1.15 + ripGlow, 0.0, 0.68);
+            gl_FragColor = vec4(surfaceCol, alpha);
+          }
         }
       `
     });
@@ -209,7 +236,8 @@
     waterSurface.rotation.x = -Math.PI / 2;
     waterSurface.position.y = 1.8;
     waterSurface.renderOrder = 15;
-    scene.add(waterSurface);
+    const waterScene = new THREE.Scene();
+    waterScene.add(waterSurface);
 
     // 3.3 Partículas subaquáticas sutis em suspensão
     const moteCount = 95;
@@ -262,6 +290,8 @@
       spawnRipple,
       pondBottomUniforms,
       waterSurfaceUniforms,
+      waterSurface,
+      waterScene,
       moteUniforms
     };
   }
