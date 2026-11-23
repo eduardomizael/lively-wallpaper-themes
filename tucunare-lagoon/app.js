@@ -342,33 +342,55 @@ const baitMat = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.35
 });
 
-const biteBubbles = [];
+const MAX_BITE_BUBBLES = 64;
 const bubbleGeo = new THREE.SphereGeometry(0.055, 8, 6);
 const bubbleMat = new THREE.MeshBasicMaterial({
   color: 0xc8faf2,
   transparent: true,
-  opacity: 0.68,
+  opacity: 0.62,
   depthWrite: false
 });
+const bubbleInstanced = new THREE.InstancedMesh(bubbleGeo, bubbleMat, MAX_BITE_BUBBLES);
+bubbleInstanced.renderOrder = 14;
+bubbleInstanced.frustumCulled = false;
+bubbleInstanced.visible = false;
+scene.add(bubbleInstanced);
+
+const bubbleDummy = new THREE.Object3D();
+const bubblePool = Array.from({ length: MAX_BITE_BUBBLES }, (_, idx) => {
+  bubbleDummy.position.set(0, -999, 0);
+  bubbleDummy.scale.setScalar(0);
+  bubbleDummy.updateMatrix();
+  bubbleInstanced.setMatrixAt(idx, bubbleDummy.matrix);
+  return {
+    active: false,
+    x: 0, y: -999, z: 0,
+    vx: 0, vy: 0, vz: 0,
+    baseScale: 1,
+    life: 0,
+    maxLife: 1
+  };
+});
+bubbleInstanced.instanceMatrix.needsUpdate = true;
+let bubbleCursor = 0;
 
 function spawnStrikeSplash(x, y, z) {
   spawnRipple(x, z, 1.35);
   for (let i = 0; i < 11; i++) {
-    const mesh = new THREE.Mesh(bubbleGeo, bubbleMat.clone());
+    const slot = bubblePool[bubbleCursor];
+    bubbleCursor = (bubbleCursor + 1) % MAX_BITE_BUBBLES;
     const ang = Math.random() * Math.PI * 2;
     const spd = 0.55 + Math.random() * 1.45;
-    mesh.position.set(x, y, z);
-    mesh.scale.setScalar(0.5 + Math.random() * 1.0);
-    mesh.renderOrder = 14;
-    scene.add(mesh);
-    biteBubbles.push({
-      mesh,
-      vx: Math.cos(ang) * spd,
-      vy: 0.9 + Math.random() * 1.35,
-      vz: Math.sin(ang) * spd,
-      life: 0,
-      maxLife: 0.75 + Math.random() * 0.55
-    });
+    slot.active = true;
+    slot.x = x;
+    slot.y = y;
+    slot.z = z;
+    slot.vx = Math.cos(ang) * spd;
+    slot.vy = 0.9 + Math.random() * 1.35;
+    slot.vz = Math.sin(ang) * spd;
+    slot.baseScale = 0.5 + Math.random() * 1.0;
+    slot.life = 0;
+    slot.maxLife = 0.75 + Math.random() * 0.55;
   }
 }
 
@@ -410,22 +432,33 @@ function updateBaitsAndBubbles(dt) {
     }
   }
 
-  for (let i = biteBubbles.length - 1; i >= 0; i--) {
-    const p = biteBubbles[i];
+  let bubblesDirty = false;
+  let activeBubbles = 0;
+  for (let i = 0; i < MAX_BITE_BUBBLES; i++) {
+    const p = bubblePool[i];
+    if (!p.active) continue;
+    bubblesDirty = true;
     p.life += dt;
-    p.mesh.position.x += p.vx * dt;
-    p.mesh.position.y += p.vy * dt;
-    p.mesh.position.z += p.vz * dt;
-    p.vx *= 0.94;
-    p.vz *= 0.94;
-    const remain = 1.0 - p.life / p.maxLife;
-    p.mesh.material.opacity = Math.max(0, remain * 0.68);
     if (p.life >= p.maxLife) {
-      scene.remove(p.mesh);
-      p.mesh.material.dispose();
-      biteBubbles.splice(i, 1);
+      p.active = false;
+      bubbleDummy.position.set(0, -999, 0);
+      bubbleDummy.scale.setScalar(0);
+    } else {
+      activeBubbles++;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.z += p.vz * dt;
+      p.vx *= 0.94;
+      p.vz *= 0.94;
+      const remain = Math.max(0, 1.0 - p.life / p.maxLife);
+      bubbleDummy.position.set(p.x, p.y, p.z);
+      bubbleDummy.scale.setScalar(p.baseScale * remain);
     }
+    bubbleDummy.updateMatrix();
+    bubbleInstanced.setMatrixAt(i, bubbleDummy.matrix);
   }
+  bubbleInstanced.visible = activeBubbles > 0;
+  if (bubblesDirty) bubbleInstanced.instanceMatrix.needsUpdate = true;
 }
 
 // =========================================================================
@@ -1521,9 +1554,38 @@ window.addEventListener('resize', onResize);
 
 let lastNow = performance.now();
 let clockTime = 0;
+let livelyPaused = false;
+let hiddenPaused = Boolean(document.hidden);
+let paused = livelyPaused || hiddenPaused;
+let rafId = 0;
+
+function syncPaused() {
+  const nextPaused = livelyPaused || hiddenPaused;
+  if (nextPaused === paused) return;
+  paused = nextPaused;
+  if (paused) {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+  } else {
+    lastNow = performance.now();
+    if (!rafId) rafId = requestAnimationFrame(animate);
+  }
+}
+
+window.livelyWallpaperPlaybackChanged = function (data) {
+  let parsed = data;
+  try { if (typeof data === 'string') parsed = JSON.parse(data); } catch { parsed = null; }
+  livelyPaused = Boolean(parsed && parsed.IsPaused);
+  syncPaused();
+};
+document.addEventListener('visibilitychange', () => {
+  hiddenPaused = Boolean(document.hidden);
+  syncPaused();
+});
 
 function animate(now) {
-  requestAnimationFrame(animate);
+  rafId = 0;
+  if (paused) return;
+  rafId = requestAnimationFrame(animate);
   const dt = Math.min((now - lastNow) * 0.001, 0.05);
   lastNow = now;
   clockTime += dt;
@@ -1567,5 +1629,5 @@ function animate(now) {
   renderer.render(scene, camera);
 }
 
-requestAnimationFrame(animate);
+rafId = requestAnimationFrame(animate);
 })();
