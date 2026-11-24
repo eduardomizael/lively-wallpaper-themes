@@ -17,7 +17,7 @@
     artOpacity: 58,         // 20..100 (%) opacidade da ilustração etérea ao clicar
     showLabels: true,       // exibir nome da constelação e estrelas principais
     revealAll: false,       // exibir todos os 12 desenhos etéreos ao mesmo tempo
-    artAutoFade: 0,         // 0 = alterna no clique (fixo); >0 = segundos até esmaecer
+    artAutoFade: 10,        // segundos até o desenho desvanecer (0 = fixo)
     milkyWay: 45,           // 0..100 (%) intensidade da Via Láctea sutil
     skyDrift: 25,           // 0..100 (%) micro-paralaxe / deriva suave do céu
     interactiveMouse: true
@@ -492,7 +492,7 @@
       const kHover = 1 - Math.exp(-dt * (targetHover > c.hoverAmount ? 4.8 : 2.6));
       c.hoverAmount += (targetHover - c.hoverAmount) * kHover;
 
-      const kArt = 1 - Math.exp(-dt * (c.artTarget > c.artAlpha ? 2.4 : 1.9));
+      const kArt = 1 - Math.exp(-dt * (c.artTarget > c.artAlpha ? 2.4 : 0.75));
       c.artAlpha += (c.artTarget - c.artAlpha) * kArt;
 
       if (c.revealPulse > 0) c.revealPulse = Math.max(0, c.revealPulse - dt * 1.1);

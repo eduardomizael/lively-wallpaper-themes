@@ -56,12 +56,12 @@
     "value": 58
   },
   "artAutoFade": {
-    "text": "Auto-esmaecer Desenho (segundos, 0 = fixo)",
+    "text": "Tempo até Desvanecer o Desenho (s, 0 = fixo)",
     "type": "slider",
     "min": 0,
     "max": 60,
-    "step": 5,
-    "value": 0
+    "step": 2,
+    "value": 10
   },
   "showLabels": {
     "text": "Exibir Nomes da Constelação e Estrelas",
