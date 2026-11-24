@@ -45,7 +45,7 @@
     "value": true
   },
   "interactiveMouse": {
-    "text": "Interação com o mouse (espreita, fuga e isca ao clicar)",
+    "text": "Interação com o mouse (espreita, fuga e soltar lambari ao clicar)",
     "type": "checkbox",
     "value": true
   },

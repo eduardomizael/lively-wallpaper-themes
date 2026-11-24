@@ -184,7 +184,11 @@ Object.assign(tucunare, {
   scaleRatio: 1.0,
   speedMult: 0.96,
   hoverMult: 1.15,
-  preferredYBias: 0.16
+  preferredYBias: 0.16,
+  biteCooldown: 0,
+  headShakeTimer: 0,
+  bloodMouthTimer: 0,
+  bloodEmitAcc: 0
 });
 if (!isInspect) {
   tucunare.pos.set(-2.8, 0.20, 2.4);
@@ -195,7 +199,11 @@ Object.assign(tucunareRealista, {
   scaleRatio: TUCUNARE2_SCALE_RATIO,
   speedMult: 1.08,
   hoverMult: 0.86,
-  preferredYBias: -0.14
+  preferredYBias: -0.14,
+  biteCooldown: 0,
+  headShakeTimer: 0,
+  bloodMouthTimer: 0,
+  bloodEmitAcc: 0
 });
 if (!isInspect) {
   tucunareRealista.pos.set(3.2, -0.35, -3.0);
@@ -296,15 +304,21 @@ function createPiranhaActor(index) {
     prevSpeed: 1.45,
     angularVelocity: 0,
 
-    // Estados: 'SCHOOL' | 'STALK' | 'STRIKE' | 'EVADE' | 'FLEE'
+    // Estados: 'SCHOOL' | 'CHASE' | 'STRIKE' | 'ATTACK_TURN' | 'EVADE' | 'FLEE'
     state: 'SCHOOL',
     stateTimer: 0,
-    strikeDuration: 0.32,
+    strikeDuration: 0.36,
     evadeTimer: 0,
     evadeFrom: new THREE.Vector3(),
     fleeTimer: 0,
     fleeCooldown: 0,
     fleeHeadingOffset: 0,
+    biteCooldown: 0,
+    headShakeTimer: 0,
+    bloodMouthTimer: 0,
+    bloodEmitAcc: 0,
+    attackTurnTimer: 0,
+    attackTurnDir: (index % 2 === 0 ? 1 : -1),
 
     dartCycleTimer: 0.6 + index * 0.28,
     dartBurstLeft: 0.25,
@@ -328,21 +342,301 @@ const piranhaSchoolState = {
 };
 
 // =========================================================================
-// 7. SISTEMA DE ISCAS + BOLHAS DE BOTE
+// 7. SISTEMA DE LAMBARIS (PRESA VIVA) + SANGUE SUBAQUÁTICO + ESCAMAS + BOLHAS
 // =========================================================================
 const baits = [];
-const MAX_BAITS = 8;
+const MAX_BAITS = 6;
+const LAMBARI_SCALE_RATIO = 0.39; // Lambari (~10 cm) vs Tucunaré adulto (~52 cm)
 
-const baitGeo = new THREE.SphereGeometry(0.13, 12, 10);
-const baitMat = new THREE.MeshStandardMaterial({
-  color: 0xe6a854,
-  roughness: 0.48,
-  metalness: 0.15,
-  emissive: 0x422406,
-  emissiveIntensity: 0.35
+const sharedLambariShadowGeo = new THREE.PlaneGeometry(0.68, 2.25, 4, 12);
+sharedLambariShadowGeo.rotateX(-Math.PI / 2);
+
+function createLambariShadowMaterial(lUniforms) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      ...globalFishUniforms,
+      ...lUniforms,
+      uShadowOpacity: { value: 0.18 }
+    },
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    vertexShader: /* glsl */ `
+      uniform float uSwimPhase;
+      uniform float uTailAmp;
+      uniform float uSpineCurve;
+      varying vec2 vShadowUv;
+      void main() {
+        vShadowUv = uv;
+        vec3 p = position;
+        float s = clamp((1.10 - p.z) / 2.88, 0.0, 1.0);
+        float bodyWave = sin(uSwimPhase - s * 4.85);
+        float envelope = 0.06 + 0.94 * pow(max(0.0, s - 0.05) / 0.95, 1.38);
+        float ds = s - 0.25;
+        p.x += bodyWave * envelope * uTailAmp + uSpineCurve * (ds * ds) * 1.95;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uShadowOpacity;
+      varying vec2 vShadowUv;
+      void main() {
+        vec2 d = (vShadowUv - vec2(0.5, 0.5)) * 2.0;
+        float dist = length(vec2(d.x * 1.35, d.y));
+        float soft = exp(-dist * dist * 3.2) * (1.0 - smoothstep(0.35, 1.0, dist));
+        gl_FragColor = vec4(0.012, 0.058, 0.068, uShadowOpacity * soft);
+      }
+    `
+  });
+}
+
+// --- Sistema de Sangue Subaquático (nuvens e filamentos difusos billboarded) ---
+const MAX_BLOOD_PUFFS = 240;
+const bloodGeo = new THREE.PlaneGeometry(1, 1);
+const bloodMetaArray = new Float32Array(MAX_BLOOD_PUFFS * 4);
+const bloodMetaAttr = new THREE.InstancedBufferAttribute(bloodMetaArray, 4);
+bloodGeo.setAttribute('aBloodMeta', bloodMetaAttr);
+
+const bloodMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 }
+  },
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.NormalBlending,
+  vertexShader: /* glsl */ `
+    attribute vec4 aBloodMeta; // x=alpha, y=ageNorm, z=seed, w=density
+    varying vec2 vUv;
+    varying vec4 vMeta;
+    void main() {
+      vUv = uv;
+      vMeta = aBloodMeta;
+      vec3 worldCenter = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
+      float scale = length(vec3(instanceMatrix[0][0], instanceMatrix[0][1], instanceMatrix[0][2]));
+      vec4 mvCenter = modelViewMatrix * vec4(worldCenter, 1.0);
+      float ang = aBloodMeta.z + aBloodMeta.y * 0.65;
+      float c = cos(ang);
+      float s = sin(ang);
+      vec2 rot = vec2(position.x * c - position.y * s, position.x * s + position.y * c);
+      mvCenter.xy += rot * scale;
+      gl_Position = projectionMatrix * mvCenter;
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform float uTime;
+    varying vec2 vUv;
+    varying vec4 vMeta;
+
+    float hash21(vec2 p) {
+      p = fract(p * vec2(127.1, 311.7));
+      p += dot(p, p + 34.53);
+      return fract(p.x * p.y);
+    }
+
+    float noise2D(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(
+        mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+        mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+        f.y
+      );
+    }
+
+    void main() {
+      float alpha = vMeta.x;
+      if (alpha <= 0.004) discard;
+
+      vec2 p = vUv * 2.0 - 1.0;
+      float r = length(p);
+      if (r > 1.0) discard;
+
+      float ageNorm = vMeta.y;
+      float seed = vMeta.z;
+      float density = vMeta.w;
+
+      // Ruído orgânico de pluma de sangue se dissolvendo na água
+      vec2 np = p * (2.3 + ageNorm * 1.4) + vec2(seed * 3.1, seed * 1.9 + uTime * 0.16);
+      float n1 = noise2D(np);
+      float n2 = noise2D(np * 2.15 - vec2(uTime * 0.12, -uTime * 0.09));
+      float cloud = n1 * 0.62 + n2 * 0.38;
+
+      float distortedR = r + (cloud - 0.52) * (0.56 + ageNorm * 0.32);
+      float shape = smoothstep(0.96, 0.08, distortedR) * (0.45 + 0.75 * cloud);
+      float finalAlpha = clamp(shape * alpha * density, 0.0, 0.52);
+      if (finalAlpha <= 0.005) discard;
+
+      // Vermelho-sangue fresco escurecendo/diluindo no meio subaquático
+      vec3 freshCore = vec3(0.58, 0.025, 0.038);
+      vec3 deepCrimson = vec3(0.30, 0.018, 0.032);
+      vec3 diluted = vec3(0.20, 0.055, 0.075);
+      vec3 col = mix(deepCrimson, freshCore, smoothstep(0.75, 0.12, r) * (1.0 - ageNorm * 0.58));
+      col = mix(col, diluted, ageNorm * 0.72);
+
+      gl_FragColor = vec4(col, finalAlpha);
+    }
+  `
 });
 
-const MAX_BITE_BUBBLES = 64;
+const bloodInstanced = new THREE.InstancedMesh(bloodGeo, bloodMat, MAX_BLOOD_PUFFS);
+bloodInstanced.renderOrder = 13;
+bloodInstanced.frustumCulled = false;
+bloodInstanced.visible = false;
+scene.add(bloodInstanced);
+
+const bloodDummy = new THREE.Object3D();
+const bloodPool = Array.from({ length: MAX_BLOOD_PUFFS }, (_, idx) => {
+  bloodDummy.position.set(0, -999, 0);
+  bloodDummy.scale.setScalar(0.001);
+  bloodDummy.updateMatrix();
+  bloodInstanced.setMatrixAt(idx, bloodDummy.matrix);
+  bloodMetaArray[idx * 4] = 0;
+  return {
+    active: false,
+    x: 0, y: -999, z: 0,
+    vx: 0, vy: 0, vz: 0,
+    startScale: 0.25,
+    endScale: 1.2,
+    peakAlpha: 0.72,
+    seed: Math.random() * Math.PI * 2,
+    density: 1.0,
+    life: 0,
+    maxLife: 5.0
+  };
+});
+bloodInstanced.instanceMatrix.needsUpdate = true;
+bloodMetaAttr.needsUpdate = true;
+let bloodCursor = 0;
+let activeBloodCount = 0;
+
+function spawnBloodPuff(x, y, z, vx, vy, vz, startScale, endScale, peakAlpha, maxLife, density = 1.0) {
+  const slot = bloodPool[bloodCursor];
+  bloodCursor = (bloodCursor + 1) % MAX_BLOOD_PUFFS;
+  slot.active = true;
+  slot.x = x;
+  slot.y = y;
+  slot.z = z;
+  slot.vx = vx;
+  slot.vy = vy;
+  slot.vz = vz;
+  slot.startScale = startScale;
+  slot.endScale = endScale;
+  slot.peakAlpha = peakAlpha;
+  slot.seed = Math.random() * Math.PI * 2;
+  slot.density = density;
+  slot.life = 0;
+  slot.maxLife = maxLife;
+}
+
+function spawnBloodBurst(x, y, z, dirX, dirZ, intensity = 1.0) {
+  const count = Math.round(12 + 10 * intensity);
+  for (let i = 0; i < count; i++) {
+    const isJet = i < count * 0.48;
+    const ang = isJet
+      ? Math.atan2(dirX, dirZ) + (Math.random() - 0.5) * 1.15
+      : Math.random() * Math.PI * 2;
+    const spd = isJet
+      ? (1.2 + Math.random() * 2.4) * intensity
+      : (0.28 + Math.random() * 1.25) * intensity;
+    const vx = Math.sin(ang) * spd;
+    const vz = Math.cos(ang) * spd;
+    const vy = (Math.random() - 0.46) * 0.85 * intensity;
+    const startS = (0.18 + Math.random() * 0.24) * (0.85 + 0.25 * intensity);
+    const endS = (1.05 + Math.random() * 1.20) * (0.85 + 0.30 * intensity);
+    const alpha = Math.min(0.50, (0.26 + Math.random() * 0.18) * (0.85 + 0.18 * intensity));
+    const life = 4.0 + Math.random() * 3.2;
+    spawnBloodPuff(
+      x + (Math.random() - 0.5) * 0.24,
+      y + (Math.random() - 0.5) * 0.18,
+      z + (Math.random() - 0.5) * 0.24,
+      vx, vy, vz, startS, endS, alpha, life,
+      0.75 + Math.random() * 0.35
+    );
+  }
+}
+
+function spawnBloodTrailDrop(x, y, z, vx = 0, vy = 0, vz = 0, scaleMult = 1.0) {
+  const startS = (0.14 + Math.random() * 0.12) * scaleMult;
+  const endS = (0.78 + Math.random() * 0.62) * scaleMult;
+  spawnBloodPuff(
+    x + (Math.random() - 0.5) * 0.12,
+    y + (Math.random() - 0.5) * 0.10,
+    z + (Math.random() - 0.5) * 0.12,
+    vx + (Math.random() - 0.5) * 0.22,
+    vy + (Math.random() - 0.45) * 0.15,
+    vz + (Math.random() - 0.5) * 0.22,
+    startS,
+    endS,
+    0.26 + Math.random() * 0.14,
+    3.5 + Math.random() * 2.2,
+    0.75 + Math.random() * 0.25
+  );
+}
+
+// --- Escamas Prateadas Soltas (brilham e afundam após mordidas) ---
+const MAX_LOOSE_SCALES = 72;
+const scaleGeo = new THREE.PlaneGeometry(0.056, 0.036);
+const scaleMat = new THREE.MeshBasicMaterial({
+  color: 0xdff4f8,
+  transparent: true,
+  opacity: 0.68,
+  side: THREE.DoubleSide,
+  depthWrite: false
+});
+const scaleInstanced = new THREE.InstancedMesh(scaleGeo, scaleMat, MAX_LOOSE_SCALES);
+scaleInstanced.renderOrder = 14;
+scaleInstanced.frustumCulled = false;
+scaleInstanced.visible = false;
+scene.add(scaleInstanced);
+
+const scaleDummy = new THREE.Object3D();
+const scalePool = Array.from({ length: MAX_LOOSE_SCALES }, (_, idx) => {
+  scaleDummy.position.set(0, -999, 0);
+  scaleDummy.scale.setScalar(0);
+  scaleDummy.updateMatrix();
+  scaleInstanced.setMatrixAt(idx, scaleDummy.matrix);
+  return {
+    active: false,
+    x: 0, y: -999, z: 0,
+    vx: 0, vy: 0, vz: 0,
+    rx: 0, ry: 0, rz: 0,
+    vrx: 0, vry: 0, vrz: 0,
+    baseScale: 1,
+    life: 0,
+    maxLife: 2.5
+  };
+});
+scaleInstanced.instanceMatrix.needsUpdate = true;
+let scaleCursor = 0;
+
+function spawnLooseScales(x, y, z, count = 8) {
+  for (let i = 0; i < count; i++) {
+    const slot = scalePool[scaleCursor];
+    scaleCursor = (scaleCursor + 1) % MAX_LOOSE_SCALES;
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 0.45 + Math.random() * 1.45;
+    slot.active = true;
+    slot.x = x + (Math.random() - 0.5) * 0.22;
+    slot.y = y + (Math.random() - 0.5) * 0.16;
+    slot.z = z + (Math.random() - 0.5) * 0.22;
+    slot.vx = Math.cos(ang) * spd;
+    slot.vy = 0.25 + Math.random() * 0.75;
+    slot.vz = Math.sin(ang) * spd;
+    slot.rx = Math.random() * Math.PI * 2;
+    slot.ry = Math.random() * Math.PI * 2;
+    slot.rz = Math.random() * Math.PI * 2;
+    slot.vrx = (Math.random() - 0.5) * 11.0;
+    slot.vry = (Math.random() - 0.5) * 11.0;
+    slot.vrz = (Math.random() - 0.5) * 11.0;
+    slot.baseScale = 0.65 + Math.random() * 0.85;
+    slot.life = 0;
+    slot.maxLife = 1.9 + Math.random() * 1.6;
+  }
+}
+
+// --- Bolhas de Bote / Splash ---
+const MAX_BITE_BUBBLES = 96;
 const bubbleGeo = new THREE.SphereGeometry(0.055, 8, 6);
 const bubbleMat = new THREE.MeshBasicMaterial({
   color: 0xc8faf2,
@@ -374,64 +668,386 @@ const bubblePool = Array.from({ length: MAX_BITE_BUBBLES }, (_, idx) => {
 bubbleInstanced.instanceMatrix.needsUpdate = true;
 let bubbleCursor = 0;
 
-function spawnStrikeSplash(x, y, z) {
-  spawnRipple(x, z, 1.35);
-  for (let i = 0; i < 11; i++) {
+function spawnStrikeSplash(x, y, z, intensity = 1.0) {
+  spawnRipple(x, z, 1.35 * intensity);
+  const count = Math.round(10 + 7 * intensity);
+  for (let i = 0; i < count; i++) {
     const slot = bubblePool[bubbleCursor];
     bubbleCursor = (bubbleCursor + 1) % MAX_BITE_BUBBLES;
     const ang = Math.random() * Math.PI * 2;
-    const spd = 0.55 + Math.random() * 1.45;
+    const spd = (0.55 + Math.random() * 1.55) * intensity;
     slot.active = true;
-    slot.x = x;
-    slot.y = y;
-    slot.z = z;
+    slot.x = x + (Math.random() - 0.5) * 0.18;
+    slot.y = y + (Math.random() - 0.5) * 0.12;
+    slot.z = z + (Math.random() - 0.5) * 0.18;
     slot.vx = Math.cos(ang) * spd;
-    slot.vy = 0.9 + Math.random() * 1.35;
+    slot.vy = (0.85 + Math.random() * 1.45) * intensity;
     slot.vz = Math.sin(ang) * spd;
-    slot.baseScale = 0.5 + Math.random() * 1.0;
+    slot.baseScale = (0.48 + Math.random() * 1.0) * (0.85 + 0.25 * intensity);
     slot.life = 0;
-    slot.maxLife = 0.75 + Math.random() * 0.55;
+    slot.maxLife = 0.72 + Math.random() * 0.58;
+  }
+}
+
+function disposeLambari(l) {
+  scene.remove(l.group);
+  scene.remove(l.shadowGroup);
+  l.group.traverse((obj) => {
+    if (obj.material && typeof obj.material.dispose === 'function') {
+      obj.material.dispose();
+    }
+  });
+  if (l.shadowMat && typeof l.shadowMat.dispose === 'function') {
+    l.shadowMat.dispose();
   }
 }
 
 function spawnBait(x, z) {
-  const cz = THREE.MathUtils.clamp(z, swimVolume.minZ * 0.88, swimVolume.maxZ * 0.85);
-  const maxX = halfXAtZ(cz) * 0.88;
+  const cz = THREE.MathUtils.clamp(z, swimVolume.minZ * 0.85, swimVolume.maxZ * 0.82);
+  const maxX = halfXAtZ(cz) * 0.84;
   const cx = THREE.MathUtils.clamp(x, -maxX, maxX);
   if (baits.length >= MAX_BAITS) {
     const oldest = baits.shift();
-    scene.remove(oldest.mesh);
+    disposeLambari(oldest);
   }
-  const mesh = new THREE.Mesh(baitGeo, baitMat);
-  mesh.scale.set(1.25, 0.72, 0.82);
-  mesh.position.set(cx, 2.3, cz);
-  mesh.renderOrder = 10;
-  scene.add(mesh);
 
-  spawnRipple(cx, cz, 0.95);
-  baits.push({
-    mesh,
-    pos: new THREE.Vector3(cx, 2.3, cz),
-    targetY: -0.20 + Math.random() * 1.20,
+  const lUniforms = {
+    uSwimPhase: { value: Math.random() * Math.PI * 2 },
+    uTailAmp: { value: 0.18 },
+    uSpineCurve: { value: 0.0 },
+    uInjury: { value: 0.0 }
+  };
+  const group = window.createLambariModel(CAUSTICS_GLSL, { ...globalFishUniforms, ...lUniforms });
+  group.rotation.order = 'YXZ';
+  scene.add(group);
+
+  const shadowGroup = new THREE.Group();
+  scene.add(shadowGroup);
+  const shadowMat = createLambariShadowMaterial(lUniforms);
+  const shadowBody = new THREE.Mesh(sharedLambariShadowGeo, shadowMat);
+  shadowBody.renderOrder = 1;
+  shadowGroup.add(shadowBody);
+
+  const startHeading = Math.random() * Math.PI * 2;
+  const lambari = {
+    group,
+    shadowGroup,
+    shadowMat,
+    uniforms: lUniforms,
+    scaleRatio: LAMBARI_SCALE_RATIO * (0.92 + Math.random() * 0.18),
+    pos: new THREE.Vector3(cx, 2.95, cz),
+    vel: new THREE.Vector3(Math.sin(startHeading) * 0.8, -5.6, Math.cos(startHeading) * 0.8),
+    heading: startHeading,
+    pitch: 0.82, // Entra mergulhando de cabeça na água
+    roll: (Math.random() - 0.5) * 0.8,
+    speed: 2.2,
+    angularVelocity: 0,
+    falling: true,
+    enteredWater: false,
+    hp: 100,
+    maxHp: 100,
+    injury: 0,
+    stunTimer: 0,
+    bloodTrailTimer: 0,
+    zigTimer: 0.35 + Math.random() * 0.3,
+    zigSign: Math.random() < 0.5 ? -1 : 1,
+    swimPhase: lUniforms.uSwimPhase.value,
+    smoothSpineCurve: 0,
     age: 0,
     seed: Math.random() * Math.PI * 2
-  });
+  };
+  group.position.copy(lambari.pos);
+  baits.push(lambari);
+  return lambari;
+}
+
+function damageLambari(lambari, damage, attacker, isTucunare) {
+  const idx = baits.indexOf(lambari);
+  if (idx === -1) return false;
+
+  lambari.hp = Math.max(0, lambari.hp - damage);
+  lambari.injury = 1.0 - lambari.hp / lambari.maxHp;
+  lambari.uniforms.uInjury.value = lambari.injury;
+  lambari.stunTimer = isTucunare ? 0.28 : 0.18;
+
+  const dirX = Math.sin(attacker.heading);
+  const dirZ = Math.cos(attacker.heading);
+  const knock = isTucunare ? 3.2 : 1.9;
+  lambari.vel.x += dirX * knock;
+  lambari.vel.z += dirZ * knock;
+  lambari.vel.y += (Math.random() - 0.42) * 1.4;
+  lambari.roll += (Math.random() < 0.5 ? -1 : 1) * (isTucunare ? 1.15 : 0.65);
+
+  const killed = lambari.hp <= 0;
+  const burstIntensity = killed ? (isTucunare ? 1.75 : 1.50) : (isTucunare ? 1.30 : 0.92);
+  spawnBloodBurst(lambari.pos.x, lambari.pos.y, lambari.pos.z, dirX, dirZ, burstIntensity);
+  spawnLooseScales(lambari.pos.x, lambari.pos.y, lambari.pos.z, killed ? 16 : (isTucunare ? 10 : 7));
+  spawnStrikeSplash(lambari.pos.x, lambari.pos.y, lambari.pos.z, killed ? 1.35 : 0.95);
+
+  attacker.headShakeTimer = isTucunare ? 0.34 : 0.24;
+  attacker.bloodMouthTimer = killed ? 1.05 : 0.65;
+
+  if (killed) {
+    disposeLambari(lambari);
+    baits.splice(idx, 1);
+    return true;
+  }
+  return false;
 }
 
 function updateBaitsAndBubbles(dt) {
+  // 1. Atualiza lambaris vivos na água (queda + fuga desesperada + rastro de sangue quando feridos)
+  const hunters = [...allFish, ...piranhaSchool];
   for (let i = baits.length - 1; i >= 0; i--) {
-    const b = baits[i];
-    b.age += dt;
-    b.pos.y = THREE.MathUtils.lerp(b.pos.y, b.targetY + Math.sin(clockTime * 2.8 + b.seed) * 0.14, Math.min(1, dt * 1.4));
-    b.pos.x += Math.sin(clockTime * 1.6 + b.seed) * 0.10 * dt;
-    b.mesh.position.copy(b.pos);
-    b.mesh.rotation.y += dt * 1.4;
-    if (b.age > 32.0) {
-      scene.remove(b.mesh);
+    const l = baits[i];
+    l.age += dt;
+    const s = params.fishScale * l.scaleRatio;
+
+    if (l.falling) {
+      l.vel.y -= 14.5 * dt;
+      l.pos.addScaledVector(l.vel, dt);
+      if (!l.enteredWater && l.pos.y <= 1.65) {
+        l.enteredWater = true;
+        spawnStrikeSplash(l.pos.x, 1.55, l.pos.z, 1.15);
+      }
+      if (l.enteredWater) {
+        l.vel.y *= Math.exp(-6.2 * dt);
+        if (l.pos.y <= 0.85 || Math.abs(l.vel.y) < 0.9) {
+          l.falling = false;
+          l.speed = params.baseSpeed * 2.15;
+        }
+      }
+      l.pitch = THREE.MathUtils.lerp(l.pitch, THREE.MathUtils.clamp(-l.vel.y * 0.14, -0.75, 0.85), Math.min(1, dt * 8.0));
+      l.swimPhase += 18.0 * dt;
+      l.uniforms.uSwimPhase.value = l.swimPhase;
+      l.uniforms.uTailAmp.value = 0.24;
+      l.uniforms.uSpineCurve.value = Math.sin(clockTime * 22.0 + l.seed) * 0.22;
+    } else {
+      if (l.stunTimer > 0) l.stunTimer = Math.max(0, l.stunTimer - dt);
+      l.zigTimer -= dt;
+      if (l.zigTimer <= 0) {
+        l.zigSign = -l.zigSign;
+        l.zigTimer = 0.26 + Math.random() * 0.34;
+      }
+
+      // Vetor de fuga de todos os predadores próximos
+      let fleeX = 0, fleeY = 0, fleeZ = 0;
+      let nearestHunterDist = 999;
+      for (let h = 0; h < hunters.length; h++) {
+        const pred = hunters[h];
+        const dx = l.pos.x - pred.pos.x;
+        const dy = l.pos.y - pred.pos.y;
+        const dz = l.pos.z - pred.pos.z;
+        const dist = Math.max(0.25, Math.hypot(dx, dy * 1.2, dz));
+        if (dist < nearestHunterDist) nearestHunterDist = dist;
+        if (dist < 10.5) {
+          const weight = (pred.species === 'tucunare' ? 1.55 : 1.15) / (dist * dist);
+          fleeX += (dx / dist) * weight;
+          fleeY += (dy / dist) * weight * 0.65;
+          fleeZ += (dz / dist) * weight;
+        }
+      }
+
+      let desiredDirX = Math.sin(l.heading);
+      let desiredDirZ = Math.cos(l.heading);
+      let desiredY = l.pos.y;
+
+      const fleeLen = Math.hypot(fleeX, fleeZ);
+      if (fleeLen > 0.001) {
+        const fx = fleeX / fleeLen;
+        const fz = fleeZ / fleeLen;
+        // Zigue-zague desesperado para tentar escapar dos botes
+        const panicZig = nearestHunterDist < 4.5 ? 0.58 : 0.28;
+        desiredDirX = fx + (-fz) * l.zigSign * panicZig;
+        desiredDirZ = fz + (fx) * l.zigSign * panicZig;
+        desiredY = THREE.MathUtils.clamp(l.pos.y + fleeY * 1.8, swimVolume.minY + 0.35, swimVolume.maxY - 0.1);
+      }
+
+      // Contenção firme dentro do volume visível
+      const localHalfX = halfXAtZ(l.pos.z);
+      const safeX = localHalfX - 1.35;
+      let steerX = desiredDirX * 3.8;
+      let steerZ = desiredDirZ * 3.8;
+      if (Math.abs(l.pos.x) > safeX) {
+        const over = (Math.abs(l.pos.x) - safeX) / 1.25;
+        steerX -= Math.sign(l.pos.x) * over * over * 13.0;
+      }
+      if (l.pos.z > swimVolume.maxZ - 1.0) {
+        const over = (l.pos.z - (swimVolume.maxZ - 1.0)) / 1.0;
+        steerZ -= over * over * 13.0;
+      } else if (l.pos.z < swimVolume.minZ + 1.0) {
+        const over = ((swimVolume.minZ + 1.0) - l.pos.z) / 1.0;
+        steerZ += over * over * 13.0;
+      }
+
+      const desiredHeading = Math.atan2(steerX, steerZ);
+      const angleDiff = normalizeAngle(desiredHeading - l.heading);
+      const agility = 1.0 - l.injury * 0.42;
+      const targetAngVel = THREE.MathUtils.clamp(angleDiff * 7.8, -7.2 * agility, 7.2 * agility);
+      l.angularVelocity = THREE.MathUtils.lerp(l.angularVelocity, targetAngVel, Math.min(1, dt * 11.0));
+      l.heading = normalizeAngle(l.heading + l.angularVelocity * dt);
+
+      // Lambari saudável é muito ágil; ferido desacelera e cambaleia
+      const panicBoost = nearestHunterDist < 4.2 ? 1.28 : 1.0;
+      const injurySlow = 1.0 - l.injury * 0.48;
+      const targetSpeed = params.baseSpeed * 2.15 * panicBoost * injurySlow * (l.stunTimer > 0 ? 0.45 : 1.0);
+      l.speed = THREE.MathUtils.lerp(l.speed, targetSpeed, Math.min(1, dt * 7.5));
+
+      const fwdX = Math.sin(l.heading) * l.speed;
+      const fwdZ = Math.cos(l.heading) * l.speed;
+      l.vel.x = THREE.MathUtils.lerp(l.vel.x, fwdX, Math.min(1, dt * (l.stunTimer > 0 ? 3.2 : 8.5)));
+      l.vel.z = THREE.MathUtils.lerp(l.vel.z, fwdZ, Math.min(1, dt * (l.stunTimer > 0 ? 3.2 : 8.5)));
+      const targetVy = THREE.MathUtils.clamp((desiredY - l.pos.y) * 2.4, -2.0, 2.0);
+      l.vel.y = THREE.MathUtils.lerp(l.vel.y, targetVy, Math.min(1, dt * 5.0));
+
+      l.pos.x += l.vel.x * dt;
+      l.pos.y = THREE.MathUtils.clamp(l.pos.y + l.vel.y * dt, swimVolume.minY + 0.25, swimVolume.maxY - 0.05);
+      l.pos.z += l.vel.z * dt;
+
+      const targetPitch = THREE.MathUtils.clamp(-l.vel.y / Math.max(1.2, l.speed + 0.5) * 0.42, -0.35, 0.35);
+      l.pitch = THREE.MathUtils.lerp(l.pitch, targetPitch, Math.min(1, dt * 7.0));
+
+      // Quando muito ferido, tomba erraticamente de lado
+      const woundedList = l.injury > 0.35 ? Math.sin(clockTime * 7.5 + l.seed) * l.injury * 0.72 : 0.0;
+      const targetRoll = THREE.MathUtils.clamp(-l.angularVelocity * 0.10 + woundedList, -1.05, 1.05);
+      l.roll = THREE.MathUtils.lerp(l.roll, targetRoll, Math.min(1, dt * 6.0));
+
+      const franticFreq = 10.5 + l.speed * 4.4;
+      l.swimPhase += franticFreq * dt;
+      l.smoothSpineCurve = THREE.MathUtils.lerp(l.smoothSpineCurve, l.angularVelocity * 0.24, Math.min(1, dt * 8.0));
+      l.uniforms.uSwimPhase.value = l.swimPhase;
+      l.uniforms.uTailAmp.value = 0.14 + Math.min(0.24, l.speed * 0.055);
+      l.uniforms.uSpineCurve.value = l.smoothSpineCurve;
+
+      // Rastro contínuo de sangue enquanto o lambari ferido tenta fugir!
+      if (l.injury > 0.05) {
+        l.bloodTrailTimer -= dt;
+        if (l.bloodTrailTimer <= 0) {
+          l.bloodTrailTimer = THREE.MathUtils.lerp(0.11, 0.042, l.injury);
+          spawnBloodTrailDrop(
+            l.pos.x - Math.sin(l.heading) * (0.28 * s),
+            l.pos.y,
+            l.pos.z - Math.cos(l.heading) * (0.28 * s),
+            -l.vel.x * 0.12,
+            0.03,
+            -l.vel.z * 0.12,
+            0.78 + l.injury * 0.65
+          );
+        }
+      }
+    }
+
+    l.group.position.copy(l.pos);
+    l.group.rotation.set(l.pitch, l.heading, l.roll);
+    l.group.scale.setScalar(s);
+
+    const heightAboveBed = Math.max(0.35, l.pos.y - RIVERBED_Y);
+    const shadowSpread = 1.0 + heightAboveBed * 0.08;
+    l.shadowGroup.position.set(
+      l.pos.x + heightAboveBed * 0.30,
+      RIVERBED_Y + 0.14,
+      l.pos.z - heightAboveBed * 0.16
+    );
+    l.shadowGroup.rotation.y = l.heading;
+    l.shadowGroup.scale.set(s * shadowSpread, s, s * shadowSpread);
+    l.shadowMat.uniforms.uShadowOpacity.value = l.falling
+      ? 0.06
+      : THREE.MathUtils.clamp(0.22 - heightAboveBed * 0.03, 0.05, 0.18);
+
+    if (l.age > 45.0) {
+      disposeLambari(l);
       baits.splice(i, 1);
     }
   }
 
+  // 2. Atualiza plumas de sangue subaquáticas (expansão, arrasto na água e dissipação)
+  bloodMat.uniforms.uTime.value = clockTime;
+  let bloodDirty = false;
+  let bloodActive = 0;
+  for (let i = 0; i < MAX_BLOOD_PUFFS; i++) {
+    const p = bloodPool[i];
+    if (!p.active) continue;
+    bloodDirty = true;
+    p.life += dt;
+    if (p.life >= p.maxLife) {
+      p.active = false;
+      bloodDummy.position.set(0, -999, 0);
+      bloodDummy.scale.setScalar(0.001);
+      bloodDummy.updateMatrix();
+      bloodInstanced.setMatrixAt(i, bloodDummy.matrix);
+      bloodMetaArray[i * 4] = 0;
+    } else {
+      bloodActive++;
+      const ageNorm = p.life / p.maxLife;
+      const drag = Math.exp(-2.35 * dt);
+      p.vx *= drag;
+      p.vy *= drag;
+      p.vz *= drag;
+      // Correnteza e turbulência subaquática suave
+      p.x += (p.vx + Math.sin(clockTime * 0.9 + p.seed) * 0.055) * dt;
+      p.y += (p.vy - 0.015 + Math.cos(clockTime * 0.7 + p.seed) * 0.03) * dt;
+      p.z += (p.vz + Math.cos(clockTime * 0.8 + p.seed) * 0.045) * dt;
+
+      const grow = Math.pow(ageNorm, 0.58);
+      const curScale = THREE.MathUtils.lerp(p.startScale, p.endScale, grow);
+      const fadeIn = THREE.MathUtils.smoothstep(ageNorm, 0.0, 0.08);
+      const fadeOut = 1.0 - THREE.MathUtils.smoothstep(ageNorm, 0.28, 1.0);
+      const curAlpha = p.peakAlpha * fadeIn * fadeOut;
+
+      bloodDummy.position.set(p.x, p.y, p.z);
+      bloodDummy.scale.setScalar(curScale);
+      bloodDummy.updateMatrix();
+      bloodInstanced.setMatrixAt(i, bloodDummy.matrix);
+      const m = i * 4;
+      bloodMetaArray[m] = curAlpha;
+      bloodMetaArray[m + 1] = ageNorm;
+      bloodMetaArray[m + 2] = p.seed;
+      bloodMetaArray[m + 3] = p.density;
+    }
+  }
+  activeBloodCount = bloodActive;
+  bloodInstanced.visible = bloodActive > 0;
+  if (bloodDirty) {
+    bloodInstanced.instanceMatrix.needsUpdate = true;
+    bloodMetaAttr.needsUpdate = true;
+  }
+
+  // 3. Atualiza escamas prateadas soltas
+  let scalesDirty = false;
+  let activeScales = 0;
+  for (let i = 0; i < MAX_LOOSE_SCALES; i++) {
+    const sc = scalePool[i];
+    if (!sc.active) continue;
+    scalesDirty = true;
+    sc.life += dt;
+    if (sc.life >= sc.maxLife) {
+      sc.active = false;
+      scaleDummy.position.set(0, -999, 0);
+      scaleDummy.scale.setScalar(0);
+    } else {
+      activeScales++;
+      const drag = Math.exp(-3.1 * dt);
+      sc.vx *= drag;
+      sc.vz *= drag;
+      sc.vy = THREE.MathUtils.lerp(sc.vy, -0.26, Math.min(1, dt * 2.4));
+      sc.x += (sc.vx + Math.sin(clockTime * 3.8 + i) * 0.08) * dt;
+      sc.y += sc.vy * dt;
+      sc.z += sc.vz * dt;
+      sc.rx += sc.vrx * dt;
+      sc.ry += sc.vry * dt;
+      sc.rz += sc.vrz * dt;
+      const remain = Math.max(0, 1.0 - sc.life / sc.maxLife);
+      scaleDummy.position.set(sc.x, sc.y, sc.z);
+      scaleDummy.rotation.set(sc.rx, sc.ry, sc.rz);
+      scaleDummy.scale.setScalar(sc.baseScale * Math.min(1, remain * 2.2));
+    }
+    scaleDummy.updateMatrix();
+    scaleInstanced.setMatrixAt(i, scaleDummy.matrix);
+  }
+  scaleInstanced.visible = activeScales > 0;
+  if (scalesDirty) scaleInstanced.instanceMatrix.needsUpdate = true;
+
+  // 4. Atualiza bolhas de bote
   let bubblesDirty = false;
   let activeBubbles = 0;
   for (let i = 0; i < MAX_BITE_BUBBLES; i++) {
@@ -664,10 +1280,11 @@ function updatePiranhaSchool(dt, predators) {
   }
   const schoolHovering = piranhaSchoolState.hoverTimer > 0 && baits.length === 0;
 
-  // 2. Atualiza cada piranha com forças de boids (separação, alinhamento, coesão) + ecologia
+  // 2. Atualiza cada piranha com forças de boids (separação, alinhamento, coesão) + frenesi de caça
   const scaleNorm = Math.max(0.70, params.fishScale);
-  const mateSepR = 1.38 * scaleNorm;
+  const mateSepR = baits.length > 0 ? 0.95 * scaleNorm : 1.38 * scaleNorm;
   const mateAlignR = 4.4;
+  const bloodFrenzy = Math.min(1.0, activeBloodCount / 45.0);
 
   for (let idx = 0; idx < piranhaSchool.length; idx++) {
     const p = piranhaSchool[idx];
@@ -675,12 +1292,28 @@ function updatePiranhaSchool(dt, predators) {
     p.shadowGroup.visible = true;
     p.stateTimer += dt;
     if (p.fleeCooldown > 0) p.fleeCooldown -= dt;
+    if (p.biteCooldown > 0) p.biteCooldown = Math.max(0, p.biteCooldown - dt);
+    if (p.headShakeTimer > 0) p.headShakeTimer = Math.max(0, p.headShakeTimer - dt);
 
     const s = params.fishScale * p.scaleRatio;
     const patrolSpeed = params.baseSpeed * 1.04 * p.speedMult;
 
-    // Reação arisca a movimento brusco do cursor
-    if (params.interactiveMouse && mouse.inside && mouse.moving && p.fleeCooldown <= 0) {
+    // Rastro de sangue saindo da boca logo após morder o lambari
+    if (p.bloodMouthTimer > 0) {
+      p.bloodMouthTimer = Math.max(0, p.bloodMouthTimer - dt);
+      p.bloodEmitAcc += dt;
+      if (p.bloodEmitAcc >= 0.085) {
+        p.bloodEmitAcc = 0;
+        const mx = p.pos.x + Math.sin(p.heading) * (1.15 * s);
+        const mz = p.pos.z + Math.cos(p.heading) * (1.15 * s);
+        spawnBloodTrailDrop(mx, p.pos.y, mz, -Math.sin(p.heading) * 0.2, 0.02, -Math.cos(p.heading) * 0.2, 0.65);
+      }
+    }
+
+    const huntingActive = baits.length > 0;
+
+    // Reação arisca a movimento brusco do cursor (ignorada em frenesi de caça)
+    if (!huntingActive && params.interactiveMouse && mouse.inside && mouse.moving && p.fleeCooldown <= 0) {
       const dMouse = Math.hypot(p.pos.x - mouse.world.x, p.pos.z - mouse.world.z);
       if (dMouse < 3.6 && mouse.speed > 4.2) {
         p.state = 'FLEE';
@@ -692,7 +1325,7 @@ function updatePiranhaSchool(dt, predators) {
       }
     }
 
-    // Cautela ecológica frente aos tucunarés maiores (abre o cardume em leque)
+    // Cautela ecológica frente aos tucunarés maiores (reduzida durante o frenesi de caça!)
     let nearestPred = null;
     let nearestPredDist = 999;
     for (let i = 0; i < predators.length; i++) {
@@ -703,7 +1336,7 @@ function updatePiranhaSchool(dt, predators) {
         nearestPred = pred;
       }
     }
-    if (nearestPred && p.state !== 'FLEE' && p.state !== 'EVADE') {
+    if (!huntingActive && nearestPred && p.state !== 'FLEE' && p.state !== 'EVADE') {
       const dangerRadius = (nearestPred.state === 'STRIKE' || nearestPred.state === 'FLEE')
         ? 4.6 * scaleNorm
         : 2.75 * scaleNorm;
@@ -712,30 +1345,25 @@ function updatePiranhaSchool(dt, predators) {
       }
     }
 
-    // Frenesi oportunista em iscas desprotegidas
+    // Frenesi de caça agressiva ao lambari (prioriza presa mais próxima ou ferida/sangrando)
     let targetBait = null;
-    let bestBaitDist = 999;
-    if (p.state !== 'FLEE' && p.state !== 'EVADE' && baits.length > 0) {
+    let bestBaitScore = 999;
+    if (huntingActive) {
       for (let i = 0; i < baits.length; i++) {
         const b = baits[i];
         const d = p.pos.distanceTo(b.pos);
-        let predTooClose = false;
-        for (let j = 0; j < predators.length; j++) {
-          if (predators[j].pos.distanceTo(b.pos) < 1.85 * scaleNorm) {
-            predTooClose = true;
-            break;
-          }
-        }
-        if (!predTooClose && d < bestBaitDist && d < 7.2) {
-          bestBaitDist = d;
+        // Piranhas sentem o sangue e focam ainda mais em lambaris feridos
+        const score = d - b.injury * 3.2;
+        if (score < bestBaitScore) {
+          bestBaitScore = score;
           targetBait = b;
         }
       }
-      if (targetBait && p.state !== 'STALK' && p.state !== 'STRIKE') {
-        p.state = 'STALK';
+      if (targetBait && p.state !== 'CHASE' && p.state !== 'STRIKE' && p.state !== 'ATTACK_TURN') {
+        p.state = 'CHASE';
         p.stateTimer = 0;
       }
-    } else if ((p.state === 'STALK' || p.state === 'STRIKE') && baits.length === 0) {
+    } else if (p.state === 'CHASE' || p.state === 'STRIKE' || p.state === 'ATTACK_TURN') {
       p.state = 'SCHOOL';
       p.stateTimer = 0;
     }
@@ -795,53 +1423,79 @@ function updatePiranhaSchool(dt, predators) {
         p.state = 'SCHOOL';
         p.stateTimer = 0;
       }
-    } else if (p.state === 'STALK' && targetBait) {
-      const toX = targetBait.pos.x - p.pos.x;
-      const toZ = targetBait.pos.z - p.pos.z;
+    } else if (p.state === 'ATTACK_TURN') {
+      // Guinada explosiva após arrancar um naco para dar meia-volta e atacar novamente
+      p.attackTurnTimer -= dt;
+      const turnAng = p.heading + p.attackTurnDir * 1.35;
+      desiredDirX = Math.sin(turnAng);
+      desiredDirZ = Math.cos(turnAng);
+      desiredY = targetBait ? THREE.MathUtils.clamp(targetBait.pos.y + (p.schoolIndex - 2) * 0.16, swimVolume.minY + 0.3, swimVolume.maxY) : p.pos.y;
+      p.speed = THREE.MathUtils.lerp(p.speed, patrolSpeed * 2.55, Math.min(1, dt * 8.5));
+      thrustEffort = 1.25;
+      if (p.attackTurnTimer <= 0) {
+        p.state = targetBait ? 'CHASE' : 'SCHOOL';
+        p.stateTimer = 0;
+      }
+    } else if (p.state === 'CHASE' && targetBait) {
+      // Interceptação preditiva + leve flanqueamento do cardume para cercar o lambari
+      const distRaw = p.pos.distanceTo(targetBait.pos);
+      const lead = THREE.MathUtils.clamp(distRaw / Math.max(2.5, p.speed * 1.45), 0.04, 0.38);
+      const predX = targetBait.pos.x + targetBait.vel.x * lead;
+      const predZ = targetBait.pos.z + targetBait.vel.z * lead;
+      const toX = predX - p.pos.x;
+      const toZ = predZ - p.pos.z;
       const horizDist = Math.max(0.01, Math.hypot(toX, toZ));
-      desiredDirX = toX / horizDist;
-      desiredDirZ = toZ / horizDist;
+      const nx = toX / horizDist;
+      const nz = toZ / horizDist;
+      // Flanqueamento suave em média distância para cercar o lambari
+      const flankWeight = horizDist > 2.4 ? (p.schoolIndex - 2) * 0.14 : 0.0;
+      desiredDirX = nx - nz * flankWeight;
+      desiredDirZ = nz + nx * flankWeight;
       desiredY = targetBait.pos.y;
+
       const targetHeading = Math.atan2(desiredDirX, desiredDirZ);
       const headingErr = Math.abs(normalizeAngle(targetHeading - p.heading));
-      p.speed = THREE.MathUtils.lerp(p.speed, patrolSpeed * 1.22, Math.min(1, dt * 4.5));
-      thrustEffort = 0.48;
-      if (horizDist < 2.8 && headingErr < 0.40 && p.stateTimer > 0.18) {
+      const chaseSpd = patrolSpeed * (2.35 + bloodFrenzy * 0.55);
+      p.speed = THREE.MathUtils.lerp(p.speed, chaseSpd, Math.min(1, dt * 8.5));
+      thrustEffort = 1.15 + bloodFrenzy * 0.30;
+
+      if (horizDist < 3.4 && headingErr < 0.68 && p.biteCooldown <= 0) {
         p.state = 'STRIKE';
         p.stateTimer = 0;
-        p.strikeDuration = 0.32;
-        spawnRipple(p.pos.x, p.pos.z, 0.55);
+        p.strikeDuration = 0.38;
+        spawnRipple(p.pos.x, p.pos.z, 0.65);
       }
     } else if (p.state === 'STRIKE') {
       const pr = Math.min(p.stateTimer / p.strikeDuration, 1.0);
       const impulse = Math.sin(pr * Math.PI);
-      p.speed = THREE.MathUtils.lerp(p.speed, patrolSpeed * (2.6 + 0.5 * impulse), Math.min(1, dt * 10.0));
-      thrustEffort = 0.80 + 0.90 * impulse;
+      const strikeSpd = patrolSpeed * (3.35 + 0.65 * impulse + bloodFrenzy * 0.45);
+      p.speed = THREE.MathUtils.lerp(p.speed, strikeSpd, Math.min(1, dt * 13.0));
+      thrustEffort = 1.35 + 0.55 * impulse;
       if (targetBait) {
-        const toX = targetBait.pos.x - p.pos.x;
-        const toZ = targetBait.pos.z - p.pos.z;
+        const lead = 0.09;
+        const toX = (targetBait.pos.x + targetBait.vel.x * lead) - p.pos.x;
+        const toZ = (targetBait.pos.z + targetBait.vel.z * lead) - p.pos.z;
         const len = Math.max(0.01, Math.hypot(toX, toZ));
         desiredDirX = toX / len;
         desiredDirZ = toZ / len;
         desiredY = targetBait.pos.y;
-        const mouthX = p.pos.x + Math.sin(p.heading) * (1.25 * s);
-        const mouthZ = p.pos.z + Math.cos(p.heading) * (1.25 * s);
+
+        const mouthX = p.pos.x + Math.sin(p.heading) * (1.22 * s);
+        const mouthZ = p.pos.z + Math.cos(p.heading) * (1.22 * s);
         const mouthDist = Math.hypot(mouthX - targetBait.pos.x, p.pos.y - targetBait.pos.y, mouthZ - targetBait.pos.z);
-        if (mouthDist < 0.72 * Math.max(0.65, s)) {
-          const bIdx = baits.indexOf(targetBait);
-          if (bIdx !== -1) {
-            spawnStrikeSplash(targetBait.pos.x, targetBait.pos.y, targetBait.pos.z);
-            scene.remove(targetBait.mesh);
-            baits.splice(bIdx, 1);
-          }
-          // Após abocanhar, o cardume inteiro dá uma arrancada curta e muda de destino
-          const retreatRef = nearestPred ? nearestPred.pos : p.pos;
-          piranhaSchool.forEach(mate => triggerPiranhaEvade(mate, retreatRef));
-          pickSchoolTarget();
+        if (mouthDist < 0.96 * Math.max(0.68, s) && p.biteCooldown <= 0) {
+          const biteDamage = 34 + Math.random() * 18;
+          const killed = damageLambari(targetBait, biteDamage, p, false);
+          p.biteCooldown = 0.52 + Math.random() * 0.24;
+          p.attackTurnDir = (Math.random() < 0.5 ? -1 : 1);
+          p.attackTurnTimer = killed ? 0.38 : 0.26;
+          p.state = 'ATTACK_TURN';
+          p.stateTimer = 0;
+          if (killed) pickSchoolTarget();
         }
       }
       if (p.state === 'STRIKE' && p.stateTimer >= p.strikeDuration) {
-        p.state = 'SCHOOL';
+        p.state = targetBait ? 'CHASE' : 'SCHOOL';
         p.stateTimer = 0;
       }
     } else {
@@ -913,7 +1567,8 @@ function updatePiranhaSchool(dt, predators) {
       steerZ += over * over * 9.5;
     }
 
-    const predSepR = 3.2 * scaleNorm;
+    const predSepR = huntingActive ? 1.55 * scaleNorm : 3.2 * scaleNorm;
+    const predSepW = huntingActive ? 2.4 : 6.5;
     for (let i = 0; i < predators.length; i++) {
       const pred = predators[i];
       const dx = p.pos.x - pred.pos.x;
@@ -921,44 +1576,47 @@ function updatePiranhaSchool(dt, predators) {
       const dH = Math.hypot(dx, dz);
       if (dH < predSepR && dH > 0.001) {
         const push = 1.0 - dH / predSepR;
-        steerX += (dx / dH) * push * 6.5;
-        steerZ += (dz / dH) * push * 6.5;
+        steerX += (dx / dH) * push * predSepW;
+        steerZ += (dz / dH) * push * predSepW;
       }
     }
 
     const desiredHeading = Math.atan2(steerX, steerZ);
     const angleDiff = normalizeAngle(desiredHeading - p.heading);
-    const agileTurn = p.state === 'FLEE' || p.state === 'EVADE' || p.state === 'STRIKE';
-    const maxTurn = agileTurn ? 4.8 : (schoolHovering ? 1.5 : 2.7);
-    const turnGain = agileTurn ? 5.2 : 2.7;
+    const huntingTurn = p.state === 'CHASE' || p.state === 'STRIKE' || p.state === 'ATTACK_TURN';
+    const agileTurn = huntingTurn || p.state === 'FLEE' || p.state === 'EVADE';
+    const maxTurn = huntingTurn ? 6.4 : (agileTurn ? 4.8 : (schoolHovering ? 1.5 : 2.7));
+    const turnGain = huntingTurn ? 7.2 : (agileTurn ? 5.2 : 2.7);
     const targetAngVel = THREE.MathUtils.clamp(angleDiff * turnGain, -maxTurn, maxTurn);
-    p.angularVelocity = THREE.MathUtils.lerp(p.angularVelocity, targetAngVel, Math.min(1, dt * 6.5));
+    p.angularVelocity = THREE.MathUtils.lerp(p.angularVelocity, targetAngVel, Math.min(1, dt * (huntingTurn ? 10.5 : 6.5)));
 
     p.heading = normalizeAngle(p.heading + p.angularVelocity * dt);
     p.pos.x += Math.sin(p.heading) * p.speed * dt;
     p.pos.z += Math.cos(p.heading) * p.speed * dt;
 
     const clampedY = THREE.MathUtils.clamp(desiredY, swimVolume.minY + 0.25, swimVolume.maxY);
-    const targetVelY = THREE.MathUtils.clamp((clampedY - p.pos.y) * 1.5, -1.25, 1.25);
-    p.velY = THREE.MathUtils.lerp(p.velY, targetVelY, Math.min(1, dt * 3.0));
+    const yRate = huntingTurn ? 2.8 : 1.5;
+    const targetVelY = THREE.MathUtils.clamp((clampedY - p.pos.y) * yRate, -2.2, 2.2);
+    p.velY = THREE.MathUtils.lerp(p.velY, targetVelY, Math.min(1, dt * (huntingTurn ? 5.5 : 3.0)));
     p.pos.y = THREE.MathUtils.clamp(p.pos.y + p.velY * dt, swimVolume.minY + 0.25, swimVolume.maxY);
 
-    const targetPitch = THREE.MathUtils.clamp(-p.velY / Math.max(1.0, p.speed + 0.7) * 0.36, -0.22, 0.20);
+    const targetPitch = THREE.MathUtils.clamp(-p.velY / Math.max(1.0, p.speed + 0.7) * 0.36, -0.26, 0.24);
     p.pitch = THREE.MathUtils.lerp(p.pitch, targetPitch, Math.min(1, dt * 4.5));
-    const targetRoll = THREE.MathUtils.clamp(-p.angularVelocity * 0.14 * Math.min(1, p.speed * 0.5), -0.24, 0.24);
+    const targetRoll = THREE.MathUtils.clamp(-p.angularVelocity * 0.14 * Math.min(1, p.speed * 0.5), -0.32, 0.32);
     p.roll = THREE.MathUtils.lerp(p.roll, targetRoll, Math.min(1, dt * 4.8));
 
-    // Acoplamento corpo/cauda/curva + sombra
+    // Acoplamento corpo/cauda/curva + chacoalhão da mordida + sombra
     const rawAccel = (p.speed - p.prevSpeed) / Math.max(dt, 0.001);
     p.prevSpeed = p.speed;
-    const targetEffort = THREE.MathUtils.clamp(thrustEffort + Math.max(0, rawAccel) * 0.18, 0.08, 1.75);
-    p.smoothEffort = THREE.MathUtils.lerp(p.smoothEffort, targetEffort, Math.min(1, dt * 6.8));
+    const targetEffort = THREE.MathUtils.clamp(thrustEffort + Math.max(0, rawAccel) * 0.18, 0.08, 1.95);
+    p.smoothEffort = THREE.MathUtils.lerp(p.smoothEffort, targetEffort, Math.min(1, dt * 7.5));
 
-    p.swimPhase += (2.4 + p.smoothEffort * 9.8) * dt;
-    p.smoothSpineCurve = THREE.MathUtils.lerp(p.smoothSpineCurve, p.angularVelocity * 0.34, Math.min(1, dt * 6.0));
+    p.swimPhase += (2.6 + p.smoothEffort * 11.2) * dt;
+    const shakeCurve = p.headShakeTimer > 0 ? Math.sin(clockTime * 44.0 + p.schoolIndex) * 0.52 * (p.headShakeTimer / 0.24) : 0;
+    p.smoothSpineCurve = THREE.MathUtils.lerp(p.smoothSpineCurve, p.angularVelocity * 0.34, Math.min(1, dt * 6.5));
     p.uniforms.uSwimPhase.value = p.swimPhase;
-    p.uniforms.uTailAmp.value = 0.065 + p.smoothEffort * 0.21;
-    p.uniforms.uSpineCurve.value = p.smoothSpineCurve;
+    p.uniforms.uTailAmp.value = 0.065 + p.smoothEffort * 0.22;
+    p.uniforms.uSpineCurve.value = p.smoothSpineCurve + shakeCurve;
 
     const bobY = Math.sin(clockTime * 1.85 + p.schoolIndex * 1.3) * 0.032;
     const finalY = p.pos.y + bobY;
@@ -1067,43 +1725,60 @@ function updateTucunare(fish, dt, peers = []) {
 
   fish.stateTimer += dt;
   if (fish.fleeCooldown > 0) fish.fleeCooldown -= dt;
+  if (fish.biteCooldown > 0) fish.biteCooldown = Math.max(0, fish.biteCooldown - dt);
+  if (fish.headShakeTimer > 0) fish.headShakeTimer = Math.max(0, fish.headShakeTimer - dt);
 
   const s = params.fishScale * (fish.scaleRatio || 1.0);
   const patrolSpeed = params.baseSpeed * (fish.speedMult || 1.0);
   const hoverFactor = (fish.hoverMult || 1.0) * params.ambushTendency;
-  const strikePeakSpeed = patrolSpeed * 3.2;
+  const strikePeakSpeed = patrolSpeed * 4.15;
 
-  // 1. Reação defensiva a movimento brusco muito próximo
-  if (params.interactiveMouse && mouse.inside && mouse.moving && fish.fleeCooldown <= 0) {
+  // Rastro de sangue saindo da boca do tucunaré após atacar o lambari
+  if (fish.bloodMouthTimer > 0) {
+    fish.bloodMouthTimer = Math.max(0, fish.bloodMouthTimer - dt);
+    fish.bloodEmitAcc += dt;
+    if (fish.bloodEmitAcc >= 0.075) {
+      fish.bloodEmitAcc = 0;
+      const mx = fish.pos.x + Math.sin(fish.heading) * (1.95 * s);
+      const mz = fish.pos.z + Math.cos(fish.heading) * (1.95 * s);
+      spawnBloodTrailDrop(mx, fish.pos.y, mz, -Math.sin(fish.heading) * 0.22, 0.02, -Math.cos(fish.heading) * 0.22, 0.92);
+    }
+  }
+
+  const hasPrey = baits.length > 0;
+
+  // 1. Reação defensiva a movimento brusco muito próximo (ignorada quando está caçando lambari)
+  if (!hasPrey && params.interactiveMouse && mouse.inside && mouse.moving && fish.fleeCooldown <= 0) {
     const dMouse = Math.hypot(fish.pos.x - mouse.world.x, fish.pos.z - mouse.world.z);
     if (dMouse < 3.4 && mouse.speed > 5.5) {
       triggerPredatorFlee(fish);
     }
   }
 
-  // 2. Verifica isca na água (evitando colisão direta quando o outro tucunaré já está mais perto)
+  // 2. Caça agressiva aos lambaris na água (ambos os tucunarés caçam ativamente!)
   let nearestBait = null;
   let nearestBaitScore = 999;
   const otherTucunare = peers.find(peer => peer && peer.species === 'tucunare');
-  if (fish.state !== 'FLEE' && baits.length > 0) {
+  if (hasPrey) {
     for (let i = 0; i < baits.length; i++) {
       const b = baits[i];
       const d = fish.pos.distanceTo(b.pos);
-      let score = d;
-      if (otherTucunare && (otherTucunare.state === 'STALK' || otherTucunare.state === 'STRIKE')) {
+      let score = d - b.injury * 2.0;
+      // Se houver mais de um lambari, evita que ambos escolham sempre o mesmo alvo distante
+      if (baits.length > 1 && otherTucunare && (otherTucunare.state === 'CHASE' || otherTucunare.state === 'STRIKE')) {
         const dOther = otherTucunare.pos.distanceTo(b.pos);
-        if (dOther + 0.4 < d) score += 3.5;
+        if (dOther + 0.5 < d) score += 2.8;
       }
       if (score < nearestBaitScore) {
         nearestBaitScore = score;
         nearestBait = b;
       }
     }
-    if (nearestBait && fish.state !== 'STALK' && fish.state !== 'STRIKE') {
-      fish.state = 'STALK';
+    if (nearestBait && fish.state !== 'CHASE' && fish.state !== 'STRIKE') {
+      fish.state = 'CHASE';
       fish.stateTimer = 0;
     }
-  } else if (fish.state === 'STALK' && baits.length === 0) {
+  } else if (fish.state === 'CHASE') {
     fish.state = 'PATROL';
     fish.stateTimer = 0;
   }
@@ -1137,10 +1812,15 @@ function updateTucunare(fish, dt, peers = []) {
       fish.stateTimer = 0;
       pickPatrolWaypoint(fish);
     }
-  } else if (fish.state === 'STALK' && nearestBait) {
-    targetDorsalFlare = 0.98;
-    const toX = nearestBait.pos.x - fish.pos.x;
-    const toZ = nearestBait.pos.z - fish.pos.z;
+  } else if (fish.state === 'CHASE' && nearestBait) {
+    // Perseguição explosiva com interceptação preditiva do lambari em fuga
+    targetDorsalFlare = 1.0;
+    const rawDist = fish.pos.distanceTo(nearestBait.pos);
+    const lead = THREE.MathUtils.clamp(rawDist / Math.max(3.0, fish.speed * 1.4), 0.05, 0.42);
+    const predX = nearestBait.pos.x + nearestBait.vel.x * lead;
+    const predZ = nearestBait.pos.z + nearestBait.vel.z * lead;
+    const toX = predX - fish.pos.x;
+    const toZ = predZ - fish.pos.z;
     const horizDist = Math.max(0.01, Math.hypot(toX, toZ));
     desiredDirX = toX / horizDist;
     desiredDirZ = toZ / horizDist;
@@ -1149,54 +1829,64 @@ function updateTucunare(fish, dt, peers = []) {
     const targetHeading = Math.atan2(desiredDirX, desiredDirZ);
     const headingErr = Math.abs(normalizeAngle(targetHeading - fish.heading));
 
-    const stalkSpd = horizDist > 4.6 ? patrolSpeed * 0.88 : patrolSpeed * 0.42;
-    fish.speed = THREE.MathUtils.lerp(fish.speed, stalkSpd, Math.min(1, dt * 3.2));
-    thrustEffort = horizDist > 4.6 ? 0.30 : 0.12;
+    const chaseSpd = patrolSpeed * (rawDist > 3.5 ? 2.55 : 2.25);
+    fish.speed = THREE.MathUtils.lerp(fish.speed, chaseSpd, Math.min(1, dt * 7.8));
+    thrustEffort = 1.15;
 
-    if (horizDist < 4.2 && headingErr < 0.30 && fish.stateTimer > 0.38) {
-      triggerPredatorBurst(fish, 1.15);
+    if (rawDist < 3.6) {
+      targetMouthOpen = THREE.MathUtils.clamp((3.6 - rawDist) / 2.6, 0.12, 0.65);
+    }
+
+    if (horizDist < 4.5 && headingErr < 0.58 && fish.biteCooldown <= 0) {
+      triggerPredatorBurst(fish, 1.35);
+      fish.strikeDuration = 0.44;
     }
   } else if (fish.state === 'STRIKE') {
     targetDorsalFlare = 1.0;
     const p = Math.min(fish.stateTimer / fish.strikeDuration, 1.0);
     const impulse = Math.sin(p * Math.PI);
-    const accel = (strikePeakSpeed - patrolSpeed) * 4.8 * impulse;
-    fish.speed = Math.min(strikePeakSpeed * 1.15, fish.speed + accel * dt);
-    thrustEffort = 0.65 + 1.20 * impulse;
+    const accel = (strikePeakSpeed - patrolSpeed) * 6.2 * (0.45 + 0.55 * impulse);
+    fish.speed = Math.min(strikePeakSpeed * 1.18, fish.speed + accel * dt);
+    thrustEffort = 1.15 + 0.85 * impulse;
 
     if (nearestBait) {
-      const toX = nearestBait.pos.x - fish.pos.x;
-      const toZ = nearestBait.pos.z - fish.pos.z;
+      const lead = 0.08;
+      const toX = (nearestBait.pos.x + nearestBait.vel.x * lead) - fish.pos.x;
+      const toZ = (nearestBait.pos.z + nearestBait.vel.z * lead) - fish.pos.z;
       const len = Math.max(0.01, Math.hypot(toX, toZ));
       desiredDirX = toX / len;
       desiredDirZ = toZ / len;
       desiredY = nearestBait.pos.y;
 
-      const mouthX = fish.pos.x + Math.sin(fish.heading) * (2.1 * s);
-      const mouthZ = fish.pos.z + Math.cos(fish.heading) * (2.1 * s);
+      const mouthX = fish.pos.x + Math.sin(fish.heading) * (2.05 * s);
+      const mouthZ = fish.pos.z + Math.cos(fish.heading) * (2.05 * s);
       const mouthDist = Math.hypot(mouthX - nearestBait.pos.x, fish.pos.y - nearestBait.pos.y, mouthZ - nearestBait.pos.z);
 
-      // Abre a boca progressivamente conforme se aproxima para engolir a isca no bote!
-      if (mouthDist < 2.8 * Math.max(0.75, s)) {
-        targetMouthOpen = THREE.MathUtils.clamp(1.0 - (mouthDist - 0.65 * s) / (2.15 * Math.max(0.75, s)), 0.18, 1.0);
+      // Abre a boca com força total para abocanhar o lambari no bote!
+      if (mouthDist < 3.2 * Math.max(0.75, s)) {
+        targetMouthOpen = THREE.MathUtils.clamp(1.0 - (mouthDist - 0.65 * s) / (2.4 * Math.max(0.75, s)), 0.25, 1.0);
       }
 
-      if (mouthDist < 0.92 * Math.max(0.75, s)) {
-        const idx = baits.indexOf(nearestBait);
-        if (idx !== -1) {
-          spawnStrikeSplash(nearestBait.pos.x, nearestBait.pos.y, nearestBait.pos.z);
-          scene.remove(nearestBait.mesh);
-          baits.splice(idx, 1);
+      if (mouthDist < 1.18 * Math.max(0.75, s) && fish.biteCooldown <= 0) {
+        // Ataque violento do tucunaré: pode abater no primeiro bote ou deixar agonizando em sangue
+        const biteDamage = 65 + Math.random() * 48;
+        const killed = damageLambari(nearestBait, biteDamage, fish, true);
+        fish.biteSnapTimer = 0.28;
+        fish.biteCooldown = 0.42;
+        if (killed) {
+          fish.state = 'COAST';
+          fish.stateTimer = 0;
+          pickPatrolWaypoint(fish);
+        } else {
+          // Lambari escapou ferido — tucunaré já volta à perseguição imediatamente!
+          fish.state = 'CHASE';
+          fish.stateTimer = 0;
         }
-        fish.biteSnapTimer = 0.24; // Fecha a boca com firmeza e engole
-        fish.state = 'COAST';
-        fish.stateTimer = 0;
-        pickPatrolWaypoint(fish);
       }
     }
 
     if (fish.state === 'STRIKE' && fish.stateTimer >= fish.strikeDuration) {
-      fish.state = 'COAST';
+      fish.state = nearestBait ? 'CHASE' : 'COAST';
       fish.stateTimer = 0;
     }
   } else if (fish.state === 'COAST') {
@@ -1363,47 +2053,49 @@ function updateTucunare(fish, dt, peers = []) {
   const desiredHeading = Math.atan2(steerX, steerZ);
   const angleDiff = normalizeAngle(desiredHeading - fish.heading);
 
-  const maxTurn = fish.state === 'FLEE' || fish.state === 'STRIKE' ? 3.4 : (fish.state === 'HOVER' ? 0.85 : 1.55);
-  const turnGain = fish.state === 'FLEE' || fish.state === 'STRIKE' ? 3.8 : (fish.state === 'HOVER' ? 1.15 : 1.85);
+  const huntingMode = fish.state === 'CHASE' || fish.state === 'STRIKE';
+  const maxTurn = huntingMode ? 5.0 : (fish.state === 'FLEE' ? 3.6 : (fish.state === 'HOVER' ? 0.85 : 1.55));
+  const turnGain = huntingMode ? 5.8 : (fish.state === 'FLEE' ? 3.8 : (fish.state === 'HOVER' ? 1.15 : 1.85));
   const targetAngVel = THREE.MathUtils.clamp(angleDiff * turnGain, -maxTurn, maxTurn);
-  fish.angularVelocity = THREE.MathUtils.lerp(fish.angularVelocity, targetAngVel, Math.min(1, dt * 4.5));
+  fish.angularVelocity = THREE.MathUtils.lerp(fish.angularVelocity, targetAngVel, Math.min(1, dt * (huntingMode ? 8.5 : 4.5)));
 
   fish.heading = normalizeAngle(fish.heading + fish.angularVelocity * dt);
   fish.pos.x += Math.sin(fish.heading) * fish.speed * dt;
   fish.pos.z += Math.cos(fish.heading) * fish.speed * dt;
 
   const clampedDesiredY = THREE.MathUtils.clamp(desiredY, swimVolume.minY, swimVolume.maxY);
-  const targetVelY = THREE.MathUtils.clamp((clampedDesiredY - fish.pos.y) * 1.1, -1.0, 1.0);
-  fish.velY = THREE.MathUtils.lerp(fish.velY, targetVelY, Math.min(1, dt * 2.2));
+  const targetVelY = THREE.MathUtils.clamp((clampedDesiredY - fish.pos.y) * (huntingMode ? 2.4 : 1.1), huntingMode ? -2.2 : -1.0, huntingMode ? 2.2 : 1.0);
+  fish.velY = THREE.MathUtils.lerp(fish.velY, targetVelY, Math.min(1, dt * (huntingMode ? 4.8 : 2.2)));
   fish.pos.y = THREE.MathUtils.clamp(fish.pos.y + fish.velY * dt, swimVolume.minY, swimVolume.maxY);
 
   const hoverPitchBias = fish.state === 'HOVER' ? -0.05 : 0.0;
-  const targetPitch = THREE.MathUtils.clamp(-fish.velY / Math.max(1.2, fish.speed + 0.8) * 0.40 + hoverPitchBias, -0.24, 0.22);
-  fish.pitch = THREE.MathUtils.lerp(fish.pitch, targetPitch, Math.min(1, dt * 3.4));
+  const targetPitch = THREE.MathUtils.clamp(-fish.velY / Math.max(1.2, fish.speed + 0.8) * 0.40 + hoverPitchBias, -0.28, 0.26);
+  fish.pitch = THREE.MathUtils.lerp(fish.pitch, targetPitch, Math.min(1, dt * 3.8));
 
-  const targetRoll = THREE.MathUtils.clamp(-fish.angularVelocity * 0.14 * Math.min(1, fish.speed * 0.5), -0.22, 0.22);
-  fish.roll = THREE.MathUtils.lerp(fish.roll, targetRoll, Math.min(1, dt * 3.8));
+  const targetRoll = THREE.MathUtils.clamp(-fish.angularVelocity * 0.14 * Math.min(1, fish.speed * 0.5), -0.30, 0.30);
+  fish.roll = THREE.MathUtils.lerp(fish.roll, targetRoll, Math.min(1, dt * 4.2));
 
   const rawAccel = (fish.speed - fish.prevSpeed) / Math.max(dt, 0.001);
   fish.acceleration = THREE.MathUtils.lerp(fish.acceleration, rawAccel, Math.min(1, dt * 7.5));
   fish.prevSpeed = fish.speed;
 
-  // 5. Acoplamento corpo-física
+  // 5. Acoplamento corpo-física + chacoalhão de ataque
   const accelBoost = Math.max(0, fish.acceleration) * 0.18;
-  const targetEffort = THREE.MathUtils.clamp(thrustEffort + accelBoost, 0.03, 1.85);
-  fish.smoothEffort = THREE.MathUtils.lerp(fish.smoothEffort, targetEffort, Math.min(1, dt * 5.8));
+  const targetEffort = THREE.MathUtils.clamp(thrustEffort + accelBoost, 0.03, 2.0);
+  fish.smoothEffort = THREE.MathUtils.lerp(fish.smoothEffort, targetEffort, Math.min(1, dt * 6.5));
 
-  const swimFreq = 1.8 + fish.smoothEffort * 8.6;
+  const swimFreq = 1.8 + fish.smoothEffort * 9.6;
   fish.swimPhase += swimFreq * dt;
   fish.breathPhase += (2.3 + fish.smoothEffort * 2.0) * dt;
   fish.idleDriftPhase += 1.55 * dt;
 
-  const tailAmp = 0.045 + fish.smoothEffort * 0.30;
-  fish.smoothSpineCurve = THREE.MathUtils.lerp(fish.smoothSpineCurve, fish.angularVelocity * 0.48, Math.min(1, dt * 5.8));
-  fish.smoothDorsalFlare = THREE.MathUtils.lerp(fish.smoothDorsalFlare, targetDorsalFlare, Math.min(1, dt * 4.2));
+  const tailAmp = 0.045 + fish.smoothEffort * 0.32;
+  const tucShake = fish.headShakeTimer > 0 ? Math.sin(clockTime * 38.0 + (fish.id || 1)) * 0.62 * (fish.headShakeTimer / 0.34) : 0;
+  fish.smoothSpineCurve = THREE.MathUtils.lerp(fish.smoothSpineCurve, fish.angularVelocity * 0.48, Math.min(1, dt * 6.2));
+  fish.smoothDorsalFlare = THREE.MathUtils.lerp(fish.smoothDorsalFlare, targetDorsalFlare, Math.min(1, dt * 4.8));
 
-  const fastMode = fish.state === 'STRIKE' || fish.state === 'FLEE';
-  const hoverMode = fish.state === 'HOVER' || fish.state === 'STALK';
+  const fastMode = fish.state === 'CHASE' || fish.state === 'STRIKE' || fish.state === 'FLEE';
+  const hoverMode = fish.state === 'HOVER';
   const targetSpread = fastMode ? 0.05 : (hoverMode ? 0.56 : 0.34);
   fish.smoothPectSpread = THREE.MathUtils.lerp(fish.smoothPectSpread, targetSpread, Math.min(1, dt * 4.2));
 
@@ -1414,12 +2106,12 @@ function updateTucunare(fish, dt, peers = []) {
   const turnR = Math.max(0, -fish.angularVelocity) * 0.22;
 
   // Animação suave da abertura da boca (abre rápido no bote e fecha firme ao abocanhar)
-  const mouthLerpRate = targetMouthOpen > fish.smoothMouthOpen ? 13.0 : (fish.biteSnapTimer > 0 ? 18.0 : 8.5);
+  const mouthLerpRate = targetMouthOpen > fish.smoothMouthOpen ? 15.0 : (fish.biteSnapTimer > 0 ? 20.0 : 8.5);
   fish.smoothMouthOpen = THREE.MathUtils.lerp(fish.smoothMouthOpen, targetMouthOpen, Math.min(1, dt * mouthLerpRate));
 
   fish.uniforms.uSwimPhase.value = fish.swimPhase;
   fish.uniforms.uTailAmp.value = tailAmp;
-  fish.uniforms.uSpineCurve.value = fish.smoothSpineCurve;
+  fish.uniforms.uSpineCurve.value = fish.smoothSpineCurve + tucShake;
   fish.uniforms.uPectoralSpread.value = fish.smoothPectSpread;
   fish.uniforms.uPectoralRowL.value = scull + turnL;
   fish.uniforms.uPectoralRowR.value = -scull + turnR;
@@ -1473,7 +2165,7 @@ function initGui() {
     guiControllers.fishScale = gui.add(params, 'fishScale', 0.4, 1.4, 0.05).name('Tamanho dos Peixes');
     guiControllers.showAlgae = gui.add(params, 'showAlgae').name('Algas no Fundo').onChange(syncAlgaeVisibility);
     guiControllers.interactiveMouse = gui.add(params, 'interactiveMouse').name('Interação Mouse');
-    gui.add(params, 'dropBaitCenter').name('Soltar Isca');
+    gui.add(params, 'dropBaitCenter').name('Soltar Lambari');
     gui.add(params, 'triggerStrike').name('Disparar Bote');
 
     gui.close();
