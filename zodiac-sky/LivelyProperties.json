@@ -1,4 +1,21 @@
 {
+  "layoutMode": {
+    "text": "Modo de Disposição",
+    "type": "dropdown",
+    "value": 0,
+    "items": [
+      "Mapa Completo (Todos os 12 signos)",
+      "Ciclo por Data (Signo atual em destaque)"
+    ]
+  },
+  "dateOffsetDays": {
+    "text": "Deslocar Data (dias, 0 = hoje)",
+    "type": "slider",
+    "min": 0,
+    "max": 365,
+    "step": 1,
+    "value": 0
+  },
   "starDensity": {
     "text": "Densidade de Estrelas (%)",
     "type": "slider",

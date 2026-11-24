@@ -99,6 +99,17 @@ input[type=range] {
   cursor: pointer;
 }
 
+select {
+  width: 150px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(155, 184, 255, 0.28);
+  background: rgba(12, 18, 36, 0.92);
+  color: #e3eaf8;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 input[type=checkbox] {
   width: 15px;
   height: 15px;

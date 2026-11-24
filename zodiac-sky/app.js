@@ -10,6 +10,8 @@
   if (controls) controls.hidden = !isPreview;
 
   const config = {
+    layoutMode: 0,          // 0 = Mapa Completo (12 signos), 1 = Ciclo por Data (signo atual grande no centro)
+    dateOffsetDays: 0,      // 0..365 dias de deslocamento para simular outras datas do ano
     starDensity: 100,       // 30..200 (%) quantidade de estrelas de fundo
     twinkleStrength: 65,    // 0..100 (%) cintilação
     hoverRadius: 100,       // 50..180 (%) raio de detecção ao redor da constelação
@@ -22,6 +24,51 @@
     skyDrift: 25,           // 0..100 (%) micro-paralaxe / deriva suave do céu
     interactiveMouse: true
   };
+
+  // Ordem zodiacal real e data de início [mês (1..12), dia] de cada signo
+  const ZODIAC_CALENDAR = [
+    { id: 'aries',       month: 3,  day: 21 },
+    { id: 'taurus',      month: 4,  day: 20 },
+    { id: 'gemini',      month: 5,  day: 21 },
+    { id: 'cancer',      month: 6,  day: 21 },
+    { id: 'leo',         month: 7,  day: 23 },
+    { id: 'virgo',       month: 8,  day: 23 },
+    { id: 'libra',       month: 9,  day: 23 },
+    { id: 'scorpius',    month: 10, day: 23 },
+    { id: 'sagittarius', month: 11, day: 22 },
+    { id: 'capricornus', month: 12, day: 22 },
+    { id: 'aquarius',    month: 1,  day: 20 },
+    { id: 'pisces',      month: 2,  day: 19 }
+  ];
+  const ZODIAC_INDEX_BY_ID = Object.fromEntries(ZODIAC_CALENDAR.map((z, i) => [z.id, i]));
+
+  function getZodiacPhase(offsetDays = 0) {
+    const now = new Date(Date.now() + offsetDays * 86400000);
+    const y = now.getFullYear();
+    const t = now.getTime();
+    // Monta fronteiras contínuas cobrindo o ano anterior, atual e próximo
+    const marks = [];
+    for (let yr = y - 1; yr <= y + 1; yr++) {
+      for (let i = 0; i < ZODIAC_CALENDAR.length; i++) {
+        const z = ZODIAC_CALENDAR[i];
+        marks.push({ idx: i, ms: new Date(yr, z.month - 1, z.day, 0, 0, 0).getTime() });
+      }
+    }
+    marks.sort((a, b) => a.ms - b.ms);
+    for (let i = 0; i < marks.length - 1; i++) {
+      if (t >= marks[i].ms && t < marks[i + 1].ms) {
+        const frac = (t - marks[i].ms) / Math.max(1, marks[i + 1].ms - marks[i].ms);
+        return (marks[i].idx + frac) % 12;
+      }
+    }
+    return 0;
+  }
+
+  function wrapDelta12(d) {
+    let v = ((d % 12) + 12) % 12;
+    if (v > 6) v -= 12;
+    return v;
+  }
 
   let width = 1, height = 1, dpr = 1;
   let bgCanvas = document.createElement('canvas');
@@ -130,6 +177,7 @@
     for (const def of reg) {
       const entry = {
         def,
+        zodiacIndex: ZODIAC_INDEX_BY_ID[def.id] ?? 0,
         artImg: null,
         artReady: false,
         artCanvas: document.createElement('canvas'),
@@ -139,6 +187,8 @@
         center: { x: 0, y: 0 },
         hitRadius: 100,
         scale: 100,
+        visibility: 1,
+        heroWeight: 0,
         hoverAmount: 0,
         lineAlpha: 0,
         artTarget: 0,
@@ -157,13 +207,37 @@
     }
   }
 
+  let lastOrbitalSync = 0;
+
   function layoutConstellations() {
     const minDim = Math.min(width, height);
+    const isCycleMode = Math.round(config.layoutMode) === 1;
+    const phase = isCycleMode ? getZodiacPhase(config.dateOffsetDays) : 0;
+
     for (const c of constellations) {
       const d = c.def;
-      const scale = minDim * d.scaleFactor;
-      const cx = width * d.anchor.x;
-      const cy = height * d.anchor.y;
+      let scale, cx, cy;
+
+      if (isCycleMode) {
+        // Modo Ciclo por Data: signo atual grande no centro, vizinhos girando em arco suave leste -> oeste
+        const delta = wrapDelta12(c.zodiacIndex + 0.5 - phase);
+        const absD = Math.abs(delta);
+        const hero = Math.exp(-absD * absD * 1.35);
+        c.heroWeight = hero;
+        c.visibility = absD >= 2.05 ? 0 : Math.max(0, Math.min(1, 1 - (absD - 1.15) / 0.90));
+
+        const ang = delta * 0.62;
+        cx = width * (0.50 + Math.sin(ang) * 0.44);
+        cy = height * (0.50 + (1 - Math.cos(ang)) * 0.24);
+        scale = minDim * (0.145 + hero * 0.205);
+      } else {
+        c.visibility = 1;
+        c.heroWeight = 0;
+        scale = minDim * d.scaleFactor;
+        cx = width * d.anchor.x;
+        cy = height * d.anchor.y;
+      }
+
       c.scale = scale;
       c.center.x = cx;
       c.center.y = cy;
@@ -186,7 +260,7 @@
 
       const bw = maxX - minX;
       const bh = maxY - minY;
-      c.hitRadius = Math.max(bw, bh) * 0.52;
+      c.hitRadius = Math.max(bw, bh) * (isCycleMode ? 0.56 : 0.52);
 
       if (d.artRect) {
         c.artBounds = {
@@ -308,6 +382,7 @@
     let bestDist = Infinity;
 
     for (const c of constellations) {
+      if (c.visibility <= 0.08) continue;
       const d = distanceToConstellation(c, px - ox, py - oy);
       const clickLimit = c.hitRadius * 0.95 * radiusScale;
       if (d <= clickLimit && d < bestDist) {
@@ -339,6 +414,9 @@
 
     if (name === 'starDensity' && config.starDensity !== prevDensity) buildStarfield();
     if (name === 'milkyWay' && config.milkyWay !== prevMilky) buildStaticSky();
+    if (name === 'layoutMode' || name === 'dateOffsetDays') {
+      layoutConstellations();
+    }
     if (name === 'revealAll') {
       for (const c of constellations) {
         c.artTarget = config.revealAll ? 1 : 0;
@@ -463,12 +541,24 @@
       }
     }
 
+    // Atualiza posição orbital periodicamente no modo Ciclo por Data (acompanha o relógio real)
+    if (Math.round(config.layoutMode) === 1 && now - lastOrbitalSync > 2000) {
+      lastOrbitalSync = now;
+      layoutConstellations();
+    }
+
     // 2. As 12 Constelações do Zodíaco
     const radiusScale = config.hoverRadius / 100;
     const lineMult = config.lineBrightness / 100;
     const artMaxOpacity = config.artOpacity / 100;
 
     for (const c of constellations) {
+      const vis = c.visibility;
+      if (vis <= 0.005) {
+        c.hoverAmount = 0;
+        c.lineAlpha = 0;
+        continue;
+      }
       const ox = -pointer.smoothX * 0.85;
       const oy = -pointer.smoothY * 0.85;
 
@@ -507,7 +597,7 @@
         const artSrc = c.artImg ? (c.artReady ? c.artImg : null) : c.artCanvas;
         if (artSrc) {
           ctx.save();
-          ctx.globalAlpha = c.artAlpha * artMaxOpacity;
+          ctx.globalAlpha = c.artAlpha * artMaxOpacity * vis;
           ctx.shadowColor = 'rgba(138, 166, 232, 0.28)';
           ctx.shadowBlur = Math.max(6, c.scale * 0.025);
           ctx.drawImage(
@@ -536,7 +626,7 @@
 
       // 2b. Linhas delicadas entre as estrelas (aparecem com a aproximação do mouse)
       if (c.lineAlpha > 0.008) {
-        const la = Math.min(0.85, c.lineAlpha * 0.56 * lineMult);
+        const la = Math.min(0.85, c.lineAlpha * 0.56 * lineMult * vis);
         ctx.save();
         ctx.strokeStyle = `rgba(182, 206, 248, ${la.toFixed(3)})`;
         ctx.lineWidth = 1.05;
@@ -573,7 +663,7 @@
         const radius = baseR * (1 + highlight * 0.55) * (1 - selected * 0.08 + blinkAmp * 0.18);
         const tw = 0.88 + 0.12 * Math.sin(clockTime * (1.4 + i * 0.19) + i * 1.7);
         const baseAlpha = (0.58 + magNorm * 0.34) * tw;
-        const alpha = Math.min(1, (baseAlpha + highlight * 0.32) * (1 - selected * 0.28 + blinkAmp * 0.34));
+        const alpha = Math.min(1, (baseAlpha + highlight * 0.32) * (1 - selected * 0.28 + blinkAmp * 0.34)) * vis;
         const haloBoost = (0.12 + highlight * (0.75 + magNorm * 0.55)) * (1 - selected * 0.25 + blinkAmp * 0.55);
         const diff = highlight * (s.hero ? 0.95 : magNorm * 0.48) * (1 - selected * 0.35 + blinkAmp * 0.65);
 
@@ -583,7 +673,7 @@
         if (config.showLabels && s.hero && c.artAlpha > 0.15) {
           ctx.save();
           ctx.font = '500 12px "Segoe UI", system-ui, sans-serif';
-          ctx.fillStyle = `rgba(232, 238, 252, ${(c.artAlpha * 0.82).toFixed(3)})`;
+          ctx.fillStyle = `rgba(232, 238, 252, ${(c.artAlpha * 0.82 * vis).toFixed(3)})`;
           ctx.shadowColor = 'rgba(4, 8, 18, 0.9)';
           ctx.shadowBlur = 4;
           ctx.fillText(s.name, s.sx + ox + radius + 7, s.sy + oy + 4);
@@ -592,7 +682,7 @@
       }
 
       // 2d. Nome da constelação sutil (aparece com hover forte ou com o desenho)
-      const labelAlpha = Math.max(c.hoverAmount * 0.48, c.artAlpha * 0.78);
+      const labelAlpha = Math.max(c.hoverAmount * 0.48, c.artAlpha * 0.78) * vis;
       if (config.showLabels && labelAlpha > 0.04) {
         const lx = c.center.x + c.def.labelOffset.x * c.scale + ox;
         const ly = c.center.y + c.def.labelOffset.y * c.scale + oy;
