@@ -235,7 +235,7 @@
       anchor: { x: 0.15, y: 0.81 },
       scaleFactor: 0.155,
       labelOffset: { x: 0.0, y: 0.86 },
-      artImage: 'assets/sagittarius.svg',
+      artImage: 'assets/sagittarius.png',
       artRect: { x: -0.96, y: -0.96, w: 1.92, h: 1.92 },
       stars: [
         { id: 'kausB',   name: 'Kaus Borealis',  x:  0.44, y: -0.58, mag: 2.81, color: '#ffd5a2' },
@@ -303,7 +303,7 @@
       anchor: { x: 0.63, y: 0.80 },
       scaleFactor: 0.155,
       labelOffset: { x: 0.04, y: 0.86 },
-      artImage: 'assets/aquarius.svg',
+      artImage: 'assets/aquarius.png',
       artRect: { x: -0.94, y: -0.94, w: 1.88, h: 1.88 },
       stars: [
         { id: 'sadalmelik', name: 'Sadalmelik', x:  0.02, y: -0.46, mag: 2.95, color: '#ffe6bc', hero: true },

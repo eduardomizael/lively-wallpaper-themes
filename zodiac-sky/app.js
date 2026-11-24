@@ -467,6 +467,9 @@
     if (e.key === 'p' || e.key === 'P') {
       if (controls) controls.hidden = !controls.hidden;
     } else if (e.code === 'Space') {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'SELECT') return;
+      e.preventDefault();
       toggleAllConstellations();
     }
   });

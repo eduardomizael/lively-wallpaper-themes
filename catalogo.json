@@ -63,7 +63,7 @@
       "app.js", "constellations/zodiac.js", "constellations/scorpius.js",
       "assets/aries.png", "assets/taurus.png", "assets/gemini.png", "assets/cancer.png",
       "assets/leo.png", "assets/virgo.png", "assets/libra.png", "assets/scorpius.png",
-      "assets/sagittarius.svg", "assets/capricornus.png", "assets/aquarius.svg", "assets/pisces.png",
+      "assets/sagittarius.png", "assets/capricornus.png", "assets/aquarius.png", "assets/pisces.png",
       "preview.html", "Abrir-previa.cmd", "README.md"
     ]
   }
