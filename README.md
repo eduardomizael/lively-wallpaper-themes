@@ -1,13 +1,15 @@
 # Lively Wallpaper · Coleção de temas
 
-Quatro papéis de parede animados para o Lively Wallpaper no Windows. Cada tema pode ser instalado e personalizado separadamente.
+Seis papéis de parede animados para o Lively Wallpaper no Windows. Cada tema pode ser instalado e personalizado separadamente.
 
 | Prévia | Tema | O que faz |
 | --- | --- | --- |
-| <img src="circuit-orbit/thumbnail.jpg" width="216" alt="Marcadores luminosos"> | [Circuit Orbit](circuit-orbit/README.md) | Feixes entre os ícones do desktop, sete marcadores e efeitos de energia que reagem ao mouse. |
-| <img src="koi-pond/thumbnail.jpg" width="216" alt="Carpas em um lago"> | [Koi Pond](koi-pond/README.md) | Cinco variedades de carpa 3D reagem ao cursor e disputam petiscos. |
+| <img src="circuit-orbit/thumbnail.jpg" width="216" alt="Marcadores luminosos"> | [Circuit Orbit](circuit-orbit/README.md) | Feixes entre os ícones do desktop, sete marcadores e fluido unificado em WebGL2 que reage ao mouse. |
+| <img src="koi-pond/thumbnail.jpg" width="216" alt="Carpas em um lago"> | [Koi Pond](koi-pond/README.md) | Cinco variedades de carpa 3D com refração real da água reagem ao cursor e disputam petiscos. |
 | <img src="lantern-sky-clima-e-lua/thumbnail.jpg" width="216" alt="Lanternas no céu"> | [Lantern Sky · Edição Clima e Lua](lantern-sky-clima-e-lua/README.md) | Adaptação de Lantern Sky, de Dre, com Lua, Sol e clima local. |
-| <img src="ori-energy-spheres/thumbnail.jpg" width="216" alt="Cinco esferas de energia"> | [Energy Spheres](ori-energy-spheres/README.md) | Cinco esferas procedurais com vórtices, coroas e plasma. |
+| <img src="ori-energy-spheres/thumbnail.jpg" width="216" alt="Cinco esferas de energia"> | [Energy Spheres](ori-energy-spheres/README.md) | Cinco esferas procedurais com vórtices, coroas e plasma, com suporte a WebGPU Compute e fallback WebGL2. |
+| <img src="tucunare-lagoon/thumbnail.jpg" width="216" alt="Lagoa dos tucunarés"> | [Tucunaré Lagoon](tucunare-lagoon/README.md) | Dois tucunarés 3D e cardume de piranhas em visão lateral-isométrica com algas, cáusticas e iscas interativas. |
+| <img src="zodiac-sky/thumbnail.jpg" width="216" alt="Constelações do zodíaco"> | [Zodiac Sky · Constelações](zodiac-sky/README.md) | Céu estrelado com as 12 constelações do zodíaco: aproxima o mouse para revelar linhas e clique para revelar ilustrações etéreas que desvanecem suavemente. |
 
 ## Build e instalação
 
@@ -36,7 +38,7 @@ As preferências que o Lively grava em `Library\SaveData` permanecem na bibliote
 
 ## Prévia e personalização
 
-Abra o `preview.html` do tema no navegador. No Lively, use **Personalizar** no menu do tema. Temas que reagem ao cursor precisam da entrada de mouse habilitada nas configurações do Lively. Koi Pond usa WebGL e Ori exige WebGL2 com suporte a renderização em buffers de ponto flutuante.
+Abra o `preview.html` do tema no navegador. No Lively, use **Personalizar** no menu do tema. Temas que reagem ao cursor precisam da entrada de mouse habilitada nas configurações do Lively. Koi Pond e Tucunaré Lagoon usam WebGL/Three.js; Energy Spheres usa WebGPU Compute (com fallback automático para WebGL2 com buffers de ponto flutuante). Todos os temas pausam automaticamente quando o Lively pausa o papel de parede.
 
 Para usar o Circuit Orbit com os seus ícones, siga a documentação de coleta do tema. O Lantern Sky usa serviços meteorológicos para acompanhar o clima e também tem cenários de demonstração offline.
 
@@ -57,5 +59,7 @@ As contribuições originais de **Eduardo Mizael Clemente** estão sob a [licen�
 | [Koi Pond](koi-pond/README.md#créditos) | Three.js e lil-gui. Ruído celular e cáusticas com referências de Inigo Quilez e *The Book of Shaders*. |
 | [Lantern Sky · Edição Clima e Lua](lantern-sky-clima-e-lua/README.md#créditos-e-licença) | Tema original de **Dre**, com adaptações de Eduardo Mizael Clemente. SunCalc de Vladimir Agafonkin e dados de Open-Meteo, WeatherAPI e RainViewer. |
 | [Energy Spheres](ori-energy-spheres/README.md#créditos) | Referência visual de *Ori and the Blind Forest*, desenvolvido pela Moon Studios e publicado pela Microsoft Studios. Hash de David Hoskins. |
+| [Tucunaré Lagoon](tucunare-lagoon/README.md) | Three.js e lil-gui. Cáusticas procedurais, algas subaquáticas, tucunarés 3D e cardume de piranhas. |
+| [Zodiac Sky · Constelações](zodiac-sky/README.md) | Atlas estelar interativo com as 12 constelações do zodíaco em estética etérea inspirada em cartas celestes clássicas. |
 
 Os componentes de terceiros mantêm suas próprias licenças. O pacote original de Lantern Sky identifica Dre como autor, com o campo de licença em branco. A licença MIT desta coleção cobre as contribuições de Eduardo à edição, e a redistribuição do material original depende das condições de Dre.
