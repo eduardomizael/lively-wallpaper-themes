@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640">
+  <defs>
+    <radialGradient id="bodyG" cx="44%" cy="38%" r="60%">
+      <stop offset="0%" stop-color="#9ca9cf" stop-opacity="0.92"/>
+      <stop offset="55%" stop-color="#69759b" stop-opacity="0.86"/>
+      <stop offset="100%" stop-color="#38405c" stop-opacity="0.78"/>
+    </radialGradient>
+    <radialGradient id="cloakG" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#8996be" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#556084" stop-opacity="0.78"/>
+      <stop offset="100%" stop-color="#2c334c" stop-opacity="0.65"/>
+    </radialGradient>
+  </defs>
+  <g fill="url(#bodyG)" stroke="#111626" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Flowing cloak behind shoulders -->
+    <path fill="url(#cloakG)" d="M312,188 C252,162 182,168 122,202 C154,234 196,252 248,256 C276,258 302,244 322,226 Z"/>
+    <path fill="none" stroke="#111626" stroke-width="2.4" opacity="0.65" d="M292,198 C242,186 196,194 150,212 M288,214 C244,210 202,220 168,232 M286,228 C252,232 220,242 194,248"/>
+    <!-- Horse tail -->
+    <path fill="url(#cloakG)" d="M174,330 C130,318 90,340 62,374 C98,370 124,380 144,398 C162,378 176,356 184,340 Z"/>
+    <path fill="none" stroke="#111626" stroke-width="2.2" opacity="0.65" d="M168,338 C132,334 104,348 80,368 M168,348 C140,352 118,364 102,378"/>
+    <!-- Hind legs -->
+    <path d="M208,372 C180,418 158,468 134,524 L152,534 C178,484 202,436 234,394 Z"/>
+    <path d="M242,382 C226,434 214,480 200,536 L220,540 C236,488 250,442 268,392 Z"/>
+    <!-- Horse torso & chest -->
+    <path d="M178,334 C196,294 268,284 322,292 C368,298 398,322 402,356 C406,386 380,408 336,408 C274,408 214,404 186,374 C172,360 172,346 178,334 Z"/>
+    <!-- Forelegs rearing -->
+    <path d="M366,388 C402,424 434,458 468,510 L484,498 C454,442 426,402 394,368 Z"/>
+    <path d="M388,364 C432,384 468,408 504,454 L516,440 C482,390 444,358 398,340 Z"/>
+    <!-- Human warrior torso -->
+    <path d="M312,294 C308,252 316,214 334,186 C352,174 378,176 392,194 C404,224 402,262 390,304 Z"/>
+    <!-- Head & laurel/hair -->
+    <path d="M342,184 C332,162 336,132 356,120 C376,112 398,124 402,146 C406,166 394,184 378,192 Z"/>
+    <!-- Bow arm reaching right -->
+    <path d="M388,200 C432,202 470,206 508,204 L510,224 C468,228 426,226 384,224 Z"/>
+    <!-- Drawing arm pulling bowstring -->
+    <path d="M336,196 C318,214 322,232 346,232 L386,218 L382,202 L348,208 Z"/>
+    <!-- Classical recurve bow -->
+    <path fill="none" stroke="#111626" stroke-width="7.5" d="M482,82 C526,126 534,168 516,214 C534,260 524,308 476,356"/>
+    <path fill="none" stroke="#9ca9cf" stroke-width="2.5" d="M482,82 C526,126 534,168 516,214 C534,260 524,308 476,356"/>
+    <!-- Bowstring -->
+    <path fill="none" stroke="#111626" stroke-width="2.2" d="M482,82 L378,210 L476,356"/>
+    <!-- Arrow -->
+    <path fill="none" stroke="#111626" stroke-width="4.5" d="M368,210 L568,210"/>
+    <path fill="#8e9bc2" d="M554,198 L584,210 L554,222 L562,210 Z"/>
+    <!-- Engraving hatching -->
+    <path fill="none" stroke="#111626" stroke-width="2.1" opacity="0.52" d="M216,326 C248,322 284,324 316,332 M210,348 C252,346 294,352 334,362 M218,370 C258,372 302,378 342,384 M332,226 L382,232 M328,248 L382,254 M326,270 L380,276"/>
+  </g>
+</svg>

@@ -59,8 +59,11 @@
     "id": "zodiac-sky",
     "destino": "zodiac-sky",
     "arquivos": [
-      "LivelyInfo.json", "LivelyProperties.json", "index.html", "style.css",
-      "app.js", "constellations/scorpius.js", "assets/scorpius.png",
+      "LivelyInfo.json", "LivelyProperties.json", "index.html", "style.css", "thumbnail.jpg",
+      "app.js", "constellations/zodiac.js", "constellations/scorpius.js",
+      "assets/aries.png", "assets/taurus.png", "assets/gemini.png", "assets/cancer.png",
+      "assets/leo.png", "assets/virgo.png", "assets/libra.png", "assets/scorpius.png",
+      "assets/sagittarius.svg", "assets/capricornus.png", "assets/aquarius.svg", "assets/pisces.png",
       "preview.html", "Abrir-previa.cmd", "README.md"
     ]
   }

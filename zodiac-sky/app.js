@@ -16,6 +16,7 @@
     lineBrightness: 80,     // 20..150 (%) brilho das linhas ao passar o mouse
     artOpacity: 58,         // 20..100 (%) opacidade da ilustração etérea ao clicar
     showLabels: true,       // exibir nome da constelação e estrelas principais
+    revealAll: false,       // exibir todos os 12 desenhos etéreos ao mesmo tempo
     artAutoFade: 0,         // 0 = alterna no clique (fixo); >0 = segundos até esmaecer
     milkyWay: 45,           // 0..100 (%) intensidade da Via Láctea sutil
     skyDrift: 25,           // 0..100 (%) micro-paralaxe / deriva suave do céu
@@ -185,7 +186,7 @@
 
       const bw = maxX - minX;
       const bh = maxY - minY;
-      c.hitRadius = Math.max(bw, bh) * 0.62;
+      c.hitRadius = Math.max(bw, bh) * 0.52;
 
       if (d.artRect) {
         c.artBounds = {
@@ -300,12 +301,14 @@
 
     const px = e.clientX;
     const py = e.clientY;
+    const ox = -pointer.smoothX * 0.85;
+    const oy = -pointer.smoothY * 0.85;
     const radiusScale = config.hoverRadius / 100;
     let best = null;
     let bestDist = Infinity;
 
     for (const c of constellations) {
-      const d = distanceToConstellation(c, px, py);
+      const d = distanceToConstellation(c, px - ox, py - oy);
       const clickLimit = c.hitRadius * 0.95 * radiusScale;
       if (d <= clickLimit && d < bestDist) {
         best = c;
@@ -326,7 +329,7 @@
     const prevDensity = config.starDensity;
     const prevMilky = config.milkyWay;
 
-    if (name === 'showLabels' || name === 'interactiveMouse') {
+    if (name === 'showLabels' || name === 'interactiveMouse' || name === 'revealAll') {
       config[name] = value === true || value === 'true' || value === 1;
     } else {
       const n = Number(value);
@@ -336,6 +339,12 @@
 
     if (name === 'starDensity' && config.starDensity !== prevDensity) buildStarfield();
     if (name === 'milkyWay' && config.milkyWay !== prevMilky) buildStaticSky();
+    if (name === 'revealAll') {
+      for (const c of constellations) {
+        c.artTarget = config.revealAll ? 1 : 0;
+        c.artTimer = 0;
+      }
+    }
 
     const el = document.getElementById(name);
     if (el) {
@@ -356,15 +365,21 @@
     });
   });
 
+  function toggleAllConstellations() {
+    const anyOff = constellations.some(c => c.artTarget < 0.5);
+    config.revealAll = anyOff;
+    const el = document.getElementById('revealAll');
+    if (el) el.checked = anyOff;
+    for (const c of constellations) {
+      c.artTarget = anyOff ? 1 : 0;
+      c.artTimer = 0;
+      if (anyOff) c.revealPulse = 1.0;
+    }
+  }
+
   const toggleArtBtn = document.getElementById('toggleArt');
   if (toggleArtBtn) {
-    toggleArtBtn.addEventListener('click', () => {
-      for (const c of constellations) {
-        c.artTarget = c.artTarget > 0.5 ? 0 : 1;
-        c.artTimer = 0;
-        if (c.artTarget > 0.5) c.revealPulse = 1.0;
-      }
-    });
+    toggleArtBtn.addEventListener('click', toggleAllConstellations);
   }
 
   const hideBtn = document.getElementById('hide');
@@ -374,11 +389,7 @@
     if (e.key === 'p' || e.key === 'P') {
       if (controls) controls.hidden = !controls.hidden;
     } else if (e.code === 'Space') {
-      for (const c of constellations) {
-        c.artTarget = c.artTarget > 0.5 ? 0 : 1;
-        c.artTimer = 0;
-        if (c.artTarget > 0.5) c.revealPulse = 1.0;
-      }
+      toggleAllConstellations();
     }
   });
 
@@ -452,7 +463,7 @@
       }
     }
 
-    // 2. Constelações do Zodíaco (começando por Escorpião)
+    // 2. As 12 Constelações do Zodíaco
     const radiusScale = config.hoverRadius / 100;
     const lineMult = config.lineBrightness / 100;
     const artMaxOpacity = config.artOpacity / 100;
@@ -465,15 +476,15 @@
       let targetHover = 0;
       if (config.interactiveMouse && pointer.inside) {
         const d = distanceToConstellation(c, pointer.x - ox, pointer.y - oy);
-        const outerR = c.hitRadius * 1.15 * radiusScale;
-        const innerR = c.hitRadius * 0.35 * radiusScale;
+        const outerR = c.hitRadius * 0.96 * radiusScale;
+        const innerR = c.hitRadius * 0.25 * radiusScale;
         if (d < outerR) {
           const u = Math.max(0, Math.min(1, (outerR - d) / Math.max(1, outerR - innerR)));
           targetHover = u * u * (3 - 2 * u);
         }
       }
 
-      if (c.artTarget > 0.5 && config.artAutoFade > 0) {
+      if (c.artTarget > 0.5 && !config.revealAll && config.artAutoFade > 0) {
         c.artTimer += dt;
         if (c.artTimer >= config.artAutoFade) c.artTarget = 0;
       }

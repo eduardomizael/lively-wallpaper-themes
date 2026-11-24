@@ -49,11 +49,11 @@
     name: 'Scorpius',
     namePt: 'Escorpião',
     symbol: '♏',
-    anchor: { x: 0.50, y: 0.51 },
-    scaleFactor: 0.36,
-    labelOffset: { x: -0.04, y: -0.02 },
+    anchor: { x: 0.85, y: 0.52 },
+    scaleFactor: 0.16,
+    labelOffset: { x: 0.0, y: 0.88 },
     artImage: 'assets/scorpius.png',
-    artRect: { x: -0.90, y: -0.86, w: 1.98, h: 1.72 },
+    artRect: { x: -0.92, y: -0.94, w: 1.88, h: 1.88 },
     stars: STARS,
     edges: EDGES
   });

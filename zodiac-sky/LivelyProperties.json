@@ -68,6 +68,11 @@
     "type": "checkbox",
     "value": true
   },
+  "revealAll": {
+    "text": "Exibir Todas as 12 Ilustrações",
+    "type": "checkbox",
+    "value": false
+  },
   "interactiveMouse": {
     "text": "Interação com Mouse",
     "type": "checkbox",
