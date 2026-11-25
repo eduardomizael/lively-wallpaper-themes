@@ -13,4 +13,4 @@ Tema interativo para **Lively Wallpaper** inspirado em atlas celestiais clássic
 
 ## Prévia rápida
 
-Abra `preview.html` (ou `Abrir-previa.cmd`). Pressione `P` para mostrar/ocultar os controles ou `Espaço` para revelar/ocultar todas as 12 ilustrações.
+Abra `preview.html` no navegador. Pressione `P` para mostrar/ocultar os controles ou `Espaço` para revelar/ocultar todas as 12 ilustrações.

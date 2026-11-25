@@ -18,7 +18,7 @@ A piranha-vermelha (*Pygocentrus nattereri*) divide a lagoa com os dois tucunar�
 
 ## Prévia local
 
-Execute `Abrir-previa.cmd` ou abra `preview.html` no navegador.
+Abra `preview.html` no navegador.
 
 - Tecla **`P`** ou **`H`**: exibe/oculta o painel de controles (`lil-gui`).
 - Tecla **`Espaço`** ou **clique na água**: solta uma isca para o tucunaré atacar.

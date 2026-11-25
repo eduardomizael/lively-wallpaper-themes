@@ -45,13 +45,13 @@ Para usar o Circuit Orbit com os seus ícones, siga a documentação de coleta d
 ## Manutenção
 
 - `catalogo.json` registra os temas, seus destinos e os arquivos que serão copiados.
-- Cada tema inclui `index.html`, `LivelyInfo.json`, `LivelyProperties.json`, miniatura e documentação. Os caminhos em `LivelyInfo.json` são relativos à pasta do tema.
+- Cada tema inclui `index.html`, `LivelyInfo.json`, `LivelyProperties.json`, `thumbnail.jpg`, `preview.gif` e `README.md` (além de assets externos quando necessários em execução). A build em `dist/` empacota apenas esse conjunto mínimo. Os caminhos em `LivelyInfo.json` são relativos à pasta do tema.
 - Para adicionar um tema, registre sua pasta e seus arquivos no catálogo e teste a instalação em uma biblioteca descartável com uma subpasta `wallpapers`.
 - O histórico do Circuit Orbit anterior à coleção está nos branches locais `archive/circuit-orbit/*` e nas tags `circuit-orbit/*`.
 
 ## Autoria e licenças
 
-As contribuições originais de **Eduardo Mizael Clemente** estão sob a [licença MIT](LICENSE). Você pode usar, modificar, publicar e vender essas contribuições, desde que preserve o aviso de autoria e o texto da licença nas cópias ou em partes substanciais. O instalador inclui a licença e os créditos com cada tema.
+As contribuições originais de **Eduardo Mizael Clemente** estão sob a [licença MIT](LICENSE). Você pode usar, modificar, publicar e vender essas contribuições, desde que preserve o aviso de autoria e o texto da licença nas cópias ou em partes substanciais. A licença completa e os avisos de terceiros permanecem no repositório e nos créditos de cada `README.md`.
 
 | Tema | Créditos e referências |
 | --- | --- |

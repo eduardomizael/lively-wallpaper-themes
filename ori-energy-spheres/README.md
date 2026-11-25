@@ -13,7 +13,7 @@ Estudo visual inspirado nas esferas de energia de *Ori and the Blind Forest*. Os
 | `5` | Estrela Solar | Fotosfera envolta por uma coroa luminosa |
 | `6` | Vitrine | Todos os arquétipos lado a lado |
 
-Abra `preview.html` ou execute `Abrir-previa.cmd`. Pressione `P` para mostrar ou ocultar os controles. O tema exige WebGL2 com a extensão `EXT_color_buffer_float`.
+Abra `preview.html` no navegador. Pressione `P` para mostrar ou ocultar os controles. O tema exige WebGL2 com a extensão `EXT_color_buffer_float`.
 
 No Lively, instale `ori-energy-spheres` pelo [instalador da coleção](../README.md#instalar) e abra **Personalizar**. Ajuste o arquétipo, tamanho, emissão, velocidade da simulação, turbulência, duração da fumaça, brilho e resposta ao mouse.
 

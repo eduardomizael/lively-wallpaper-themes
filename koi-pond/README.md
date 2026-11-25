@@ -17,7 +17,7 @@ Cinco carpas 3D procedurais nadam num lago em vista superior, com cáusticas ani
 - **Clicar na água:** solta um petisco flutuante com ondulação na superfície que atrai as carpas até que uma delas o alcance e coma.
 
 ## Controles e Atalhos
-- Abra `preview.html` ou execute `Abrir-previa.cmd` para testar no navegador. Use `P` ou `H` para mostrar ou ocultar os controles e `Espaço` para soltar um petisco.
+- Abra `preview.html` para testar no navegador. Use `P` ou `H` para mostrar ou ocultar os controles e `Espaço` para soltar um petisco.
 - Instale `koi-pond` pelo [instalador da coleção](../README.md#instalar). No Lively, abra **Personalizar** para ajustar quantidade, velocidade e tamanho das carpas, cáusticas e interação.
 
 `vendor/three.min.js` foi gerado a partir de `build/three.module.js` do pacote npm Three.js com esbuild 0.25.12 (`--bundle --format=iife --global-name=THREE --minify --target=es2020`). O lil-gui usa a distribuição UMD oficial.

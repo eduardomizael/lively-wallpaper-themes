@@ -75,7 +75,7 @@ A entrada usa os [eventos JavaScript normais encaminhados pelo Lively](https://g
 
 ## Configurar e abrir
 
-1. Execute `Abrir-previa.cmd` para registrar o coletor local da v2 e abrir a prévia. A tecla **P** abre ou fecha as opções.
+1. Abra `preview.html` no navegador para testar (ou execute `Configurar-utilitario.cmd` para registrar o coletor local da v2). A tecla **P** abre ou fecha as opções.
 2. Clique em **Coletar posições dos ícones**. O Windows pode pedir autorização para abrir o utilitário. Ele executa uma vez, salva o mapa em `settings/` e encerra.
 3. Se mover os ícones ou mudar os monitores, colete novamente. O mapa não muda automaticamente.
 

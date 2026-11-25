@@ -213,13 +213,7 @@ async function buildTheme(theme, outRoot, deps) {
   const outIndexPath = path.join(targetDir, 'index.html');
   fs.writeFileSync(outIndexPath, finalHtml, 'utf8');
 
-  // 6. Copia LICENSE da raiz
-  const rootLicense = path.join(ROOT_DIR, 'LICENSE');
-  if (fs.existsSync(rootLicense)) {
-    fs.copyFileSync(rootLicense, path.join(targetDir, 'LICENSE'));
-  }
-
-  // 7. Copia metadados, thumbnails, licenças e ferramentas não embutidas
+  // 6. Copia metadados, thumbnails, previews, README e assets externos listados no catálogo
   const copiedFiles = ['index.html'];
   for (const rel of theme.arquivos) {
     const normalized = normalizeRelPath(rel);
