@@ -2,7 +2,7 @@
   "AppVersion": "1.0.0.0",
   "Title": "Energy Spheres",
   "Thumbnail": "thumbnail.jpg",
-  "Preview": "thumbnail.jpg",
+  "Preview": "preview.gif",
   "Desc": "Cinco esferas de energia procedurais em WebGL2, com vórtices, combustão, ondas e plasma. Alterne entre os arquétipos ou veja todos juntos na vitrine.",
   "Author": "Eduardo Mizael Clemente",
   "License": "MIT",
