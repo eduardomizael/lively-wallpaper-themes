@@ -1,16 +1,22 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$Library,
     [Alias('Themes')]
     [string[]]$Theme,
     [switch]$Update,
     [switch]$BuildOnly,
+    [switch]$InstallDeps,
     [string]$OutDir
 )
 
 $ErrorActionPreference = 'Stop'
 
-function Assert-BuildDependencies([string]$ProjectRoot, [string]$BuildScript) {
+function Assert-BuildDependencies(
+    [string]$ProjectRoot,
+    [string]$BuildScript,
+    [bool]$Interactive,
+    [bool]$AutoInstallDeps
+) {
     $missing = @()
 
     $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
@@ -39,8 +45,34 @@ function Assert-BuildDependencies([string]$ProjectRoot, [string]$BuildScript) {
 
     & node $BuildScript --check-deps
     if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Execute 'npm install' na pasta '$ProjectRoot' e tente novamente."
-        throw 'Dependências Node do projeto não instaladas.'
+        $shouldInstall = $AutoInstallDeps
+        if (-not $shouldInstall -and $Interactive) {
+            $reply = (Read-Host "Deseja executar 'npm install' agora na pasta '$ProjectRoot'? [S/n]").Trim()
+            $shouldInstall = ([string]::IsNullOrWhiteSpace($reply) -or $reply -imatch '^(s|sim|y|yes)$')
+        }
+
+        if ($shouldInstall) {
+            Write-Host ''
+            Write-Host "Instalando dependências com 'npm install' em '$ProjectRoot'..."
+            Push-Location -LiteralPath $ProjectRoot
+            try {
+                & npm install
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Falha ao executar 'npm install' (código de saída $LASTEXITCODE)."
+                }
+            } finally {
+                Pop-Location
+            }
+
+            Write-Host ''
+            & node $BuildScript --check-deps
+            if ($LASTEXITCODE -ne 0) {
+                throw 'Dependências Node do projeto ainda ausentes após npm install.'
+            }
+        } else {
+            Write-Warning "Execute 'npm install' na pasta '$ProjectRoot' (ou rode com -InstallDeps) e tente novamente."
+            throw 'Dependências Node do projeto não instaladas.'
+        }
     }
 }
 
@@ -95,13 +127,13 @@ $distRoot = if ([string]::IsNullOrWhiteSpace($OutDir)) {
 }
 
 # 1. Valida dependências antes de qualquer ação
-Assert-BuildDependencies -ProjectRoot $PSScriptRoot -BuildScript $buildScript
+$isInteractive = (-not $BuildOnly) -and (-not $Library) -and (-not $Theme) -and (-not $Update)
+Assert-BuildDependencies -ProjectRoot $PSScriptRoot -BuildScript $buildScript -Interactive $isInteractive -AutoInstallDeps ([bool]$InstallDeps)
 
 # 2. Carrega catálogo de temas
 [object[]]$catalog = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'catalogo.json') -Raw -Encoding UTF8 | ConvertFrom-Json)
 
 # 3. Modo interativo: escolher entre "Buildar e instalar" ou "Apenas buildar"
-$isInteractive = (-not $BuildOnly) -and (-not $Library) -and (-not $Theme) -and (-not $Update)
 if ($isInteractive) {
     Write-Host ''
     Write-Host 'O que deseja fazer?'

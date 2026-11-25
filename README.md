@@ -13,7 +13,7 @@ Seis papéis de parede animados para o Lively Wallpaper no Windows. Cada tema po
 
 ## Build e instalação
 
-1. Instale o [Node.js](https://nodejs.org/) e execute `npm install` na raiz do projeto para instalar as dependências de build (`esbuild` e `html-minifier-terser`).
+1. Instale o [Node.js](https://nodejs.org/) (o instalador verifica as dependências `esbuild` e `html-minifier-terser` e oferece executar `npm install` automaticamente caso ainda não estejam instaladas).
 2. Instale o [Lively Wallpaper](https://www.rocksdanister.com/lively/) e abra-o ao menos uma vez para criar a biblioteca.
 3. Execute `build-install.cmd` com a sua conta do Windows. O utilitário verifica as dependências, permite escolher entre **buildar e instalar no Lively** ou **apenas buildar** (gerando o `index.html` único minificado + metadados em `dist/`).
 4. Se escolher instalar, confira o caminho exibido da biblioteca do Lively e escolha os números dos temas separados por vírgula, como `1,3`, ou digite `T` para todos. Se um tema já existir, o instalador pergunta se você quer atualizá-lo com backup.
@@ -25,12 +25,12 @@ Na raiz do projeto, use Windows PowerShell 5.1 ou PowerShell 7.
 
 ~~~powershell
 .\build-install.ps1
-.\build-install.ps1 -BuildOnly -Theme all
+.\build-install.ps1 -BuildOnly -Theme all -InstallDeps
 .\build-install.ps1 -Library 'D:\Lively\Library' -Theme koi-pond,lantern-sky-clima-e-lua
 .\build-install.ps1 -Library 'D:\Lively\Library' -Theme all -Update
 ~~~
 
-Com `-BuildOnly`, o script apenas gera os temas minificados em `dist/` sem instalar no Lively (também disponível via `npm run build` ou especificando `-OutDir`). Com `-Library` e `-Theme`, a instalação roda sem perguntas. Use `-Update` para substituir um tema existente. A pasta anterior é guardada em `Library\BackupsTemas` e o instalador exibe o caminho do backup.
+Com `-BuildOnly`, o script apenas gera os temas minificados em `dist/` sem instalar no Lively (também disponível via `npm run build` ou especificando `-OutDir`). Com `-InstallDeps`, o script executa `npm install` automaticamente em modo não-interativo caso as dependências de build estejam ausentes (no modo interativo, ele pergunta antes de instalar). Com `-Library` e `-Theme`, a instalação roda sem perguntas. Use `-Update` para substituir um tema existente. A pasta anterior é guardada em `Library\BackupsTemas` e o instalador exibe o caminho do backup.
 
 Para recuperar um backup, saia do Lively, mova a versão atual para fora de `wallpapers` e coloque o backup nessa pasta com o nome original do tema. Reabra o aplicativo.
 
