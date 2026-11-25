@@ -52,7 +52,7 @@
         float T=texture(a,uv+vec2(0,texel.y)).x,B=texture(a,uv-vec2(0,texel.y)).x;
         float shade=.72+.28*max(0.,dot(normalize(vec3(L-R,B-T,.15)),normalize(vec3(.3,.5,1.))));
         float alpha=(1.-exp(-d*1.5))*strength*.42*fade;
-        result=vec4(tint*shade,alpha);}`
+        result=vec4(tint*shade*alpha,alpha);}`
   };
   class MouseFluid {
     constructor(canvas) {
@@ -66,7 +66,7 @@
       });
     }
     init() {
-      const gl=this.canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:false,depth:false,stencil:false,antialias:false,preserveDrawingBuffer:false});
+      const gl=this.canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,depth:false,stencil:false,antialias:false,preserveDrawingBuffer:false});
       if(!gl || !gl.getExtension('EXT_color_buffer_float')) throw new Error('WebGL2 float render targets unavailable');
       this.gl=gl;
       const compile=(type,source)=>{

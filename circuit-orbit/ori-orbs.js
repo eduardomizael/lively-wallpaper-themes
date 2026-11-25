@@ -46,7 +46,7 @@
 
   function createTile(makeCanvas, shared=null) {
     const canvas=shared?.canvas||makeCanvas(256,256), image=makeCanvas(256,256), imageCtx=image.getContext('2d');
-    const gl=shared?.gl||canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:false,depth:false,stencil:false,antialias:false});
+    const gl=shared?.gl||canvas.getContext('webgl2',{alpha:true,premultipliedAlpha:true,depth:false,stencil:false,antialias:false});
     if(!gl||!gl.getExtension('EXT_color_buffer_float')) throw new Error('WebGL2 float unavailable');
     const linearSupported=Boolean(gl.getExtension('OES_texture_float_linear'));
     const ARCHETYPES=PALETTES.map(a=>({...a}));

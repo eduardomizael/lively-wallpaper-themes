@@ -535,7 +535,7 @@
       float edgeDistance = min(min(vUv.x, 1.0-vUv.x), min(vUv.y, 1.0-vUv.y));
       mapped *= smoothstep(0.0, 0.075, edgeDistance);
       float alpha = max(mapped.r, max(mapped.g, mapped.b));
-      fragColor = vec4(mapped / max(alpha, 0.00001), alpha);
+      fragColor = vec4(mapped, alpha);
     }
   `;
 
